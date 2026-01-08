@@ -17,6 +17,8 @@ module mini_amm::pool;
         lp_supply: Supply<LP<A, B>>,
     }
 
+    
+
     /// Initialize a new liquidity pool
     public fun init_pool<A, B>(
         coin_a: Coin<A>,
