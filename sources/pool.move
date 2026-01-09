@@ -15,6 +15,7 @@ public struct LiquidityPool<phantom A, phantom B> has key, store {
     lp_supply: Supply<LP<A, B>>,
 }
 
+
 /// Initialize a new liquidity pool
 public fun init_pool<A, B>(
     coin_a: Coin<A>,
@@ -33,7 +34,7 @@ public fun init_pool<A, B>(
     }
 }
 
-public fun add_liquidity<A, B>(
+public(package) fun add_liquidity<A, B>(
     pool: &mut LiquidityPool<A, B>,
     coin_a: Coin<A>,
     coin_b: Coin<B>,
