@@ -15,6 +15,10 @@ public struct LiquidityPool<phantom A, phantom B> has key, store {
     lp_supply: Supply<LP<A, B>>,
 }
 
+public struct LPCreated has copy, drop{
+    
+}
+
 
 /// Initialize a new liquidity pool
 public fun init_pool<A, B>(
