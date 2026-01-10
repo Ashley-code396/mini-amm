@@ -16,7 +16,7 @@ public struct Container has key {
 }
 public struct MINI_AMM has drop {}
 
-/// Initialize and share the AMM container
+/// Initialize the AMM container
 fun init(otw: MINI_AMM, ctx: &mut TxContext) {
     package::claim_and_keep(otw, ctx);
     transfer::share_object(Container {
@@ -34,10 +34,10 @@ public fun create_pool<A, B>(
     ctx: &mut TxContext,
 ) {
     let pool = pool::init_pool<A, B>(coin_a, coin_b, ctx);
-    let pool_id = object::id(&pool); // get the pool's ID (should be a value, not a reference)
+    let pool_id = object::id(&pool); 
     assert!(!bag::contains(&container.pools, pool_id), EPoolAlreadyExists);
 
-    bag::add(&mut container.pools, pool_id, pool); // correct: value, not reference
+    bag::add(&mut container.pools, pool_id, pool); 
 }
 
 //=== Getter Functions===

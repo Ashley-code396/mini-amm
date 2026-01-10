@@ -152,3 +152,54 @@ public fun remove_liquidity<A, B>(
 fun min(a: u64, b: u64): u64 {
     if (a < b) a else b
 }
+
+/// Add coins to reserve A
+public fun deposit_a<A, B>(pool: &mut LiquidityPool<A, B>, coin: Coin<A>) {
+    let bal = coin::into_balance(coin);
+    balance::join(&mut pool.reserve_a, bal);
+}
+
+/// Add coins to reserve B
+public fun deposit_b<A, B>(pool: &mut LiquidityPool<A, B>, coin: Coin<B>) {
+    let bal = coin::into_balance(coin);
+    balance::join(&mut pool.reserve_b, bal);
+}
+
+/// Remove coins from reserve A
+public fun withdraw_a<A, B>(
+    pool: &mut LiquidityPool<A, B>,
+    amount: u64,
+    ctx: &mut TxContext,
+): Coin<A> {
+    let bal = balance::split(&mut pool.reserve_a, amount);
+    coin::from_balance(bal, ctx)
+}
+
+/// Remove coins from reserve B
+public fun withdraw_b<A, B>(
+    pool: &mut LiquidityPool<A, B>,
+    amount: u64,
+    ctx: &mut TxContext,
+): Coin<B> {
+    let bal = balance::split(&mut pool.reserve_b, amount);
+    coin::from_balance(bal, ctx)
+}
+
+public fun reserve_a_value<A, B>(pool: &LiquidityPool<A, B>): u64 {
+    balance::value(&pool.reserve_a)
+}
+
+public fun reserve_b_value<A, B>(pool: &LiquidityPool<A, B>): u64 {
+    balance::value(&pool.reserve_b)
+}
+
+public fun k_last<A, B>(pool: &mut LiquidityPool<A, B>): u64 {
+    pool.k_last
+}
+
+/// Update k_last to be reserve_a * reserve_b
+public fun update_k<A, B>(pool: &mut LiquidityPool<A, B>) {
+    let reserve_a = balance::value(&pool.reserve_a);
+    let reserve_b = balance::value(&pool.reserve_b);
+    pool.k_last = reserve_a * reserve_b;
+}
