@@ -3,6 +3,7 @@ module mini_amm::admin;
 use mini_amm::mini_amm::{Self, Container};
 use sui::event;
 
+//===Error codes ===
 #[error(code = 0)]
 const ENotAdmin: vector<u8> = b"Caller is not the admin";
 

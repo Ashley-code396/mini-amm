@@ -5,6 +5,10 @@ use sui::bag::{Self, Bag};
 use sui::coin::Coin;
 use sui::package;
 
+//=== Error codes ===
+#[error(code = 1)]
+const EPoolAlreadyExists: vector<u8> = b"Pool already exists!";
+
 public struct Container has key {
     id: UID,
     pools: Bag,
@@ -31,6 +35,8 @@ public fun create_pool<A, B>(
 ) {
     let pool = pool::init_pool<A, B>(coin_a, coin_b, ctx);
     let pool_id = object::id(&pool); // get the pool's ID (should be a value, not a reference)
+    assert!(!bag::contains(&container.pools, pool_id), EPoolAlreadyExists);
+
     bag::add(&mut container.pools, pool_id, pool); // correct: value, not reference
 }
 
