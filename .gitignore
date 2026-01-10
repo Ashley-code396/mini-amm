@@ -1,3 +1,14 @@
+# Ignore build artifacts
+build/
 build/*
-.trace
-.coverage*
+
+# Ignore temp files
+*.trace
+*.coverage*
+
+# Ignore OS files
+.DS_Store
+*.swp
+
+# Ignore other Sui/Move generated files
+**/build/
