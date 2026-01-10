@@ -2,6 +2,7 @@ module mini_amm::pool;
 
 use sui::balance::{Self, Balance, Supply};
 use sui::coin::{Self, Coin};
+use sui::event;
 
 /// Phantom type for LP token
 public struct LP<phantom A, phantom B> has drop {}
@@ -15,10 +16,25 @@ public struct LiquidityPool<phantom A, phantom B> has key, store {
     lp_supply: Supply<LP<A, B>>,
 }
 
-public struct LPCreated has copy, drop{
-    
+//=== Events===
+public struct PoolInitialized has copy, drop {
+    lp_id: ID,
+    amount_a: u64,
+    amount_b: u64,
+}
+public struct LiquidityAdded has copy, drop {
+    lp_id: ID,
+    amount_a: u64,
+    amount_b: u64,
+    lp_minted: u64,
 }
 
+public struct LiquidityRemoved has copy, drop {
+    lp_id: ID,
+    amount_a: u64,
+    amount_b: u64,
+    lp_burned: u64,
+}
 
 /// Initialize a new liquidity pool
 public fun init_pool<A, B>(
@@ -29,70 +45,106 @@ public fun init_pool<A, B>(
     let value_a = coin::value(&coin_a);
     let value_b = coin::value(&coin_b);
 
-    LiquidityPool {
+    let pool = LiquidityPool {
         id: object::new(ctx),
         reserve_a: coin::into_balance(coin_a),
         reserve_b: coin::into_balance(coin_b),
         k_last: value_a * value_b,
         lp_supply: balance::create_supply<LP<A, B>>(LP {}),
-    }
+    };
+
+    event::emit(PoolInitialized {
+        lp_id: object::id(&pool),
+        amount_a: value_a,
+        amount_b: value_b,
+    });
+
+    (pool)
 }
 
-public(package) fun add_liquidity<A, B>(
+public fun add_liquidity<A, B>(
     pool: &mut LiquidityPool<A, B>,
     coin_a: Coin<A>,
     coin_b: Coin<B>,
     ctx: &mut TxContext,
 ): Coin<LP<A, B>> {
-    let balance_a = coin::into_balance(coin_a);
-    let balance_b = coin::into_balance(coin_b);
+    let amount_a = coin::value(&coin_a);
+    let amount_b = coin::value(&coin_b);
 
-    balance::join(&mut pool.reserve_a, balance_a);
-    balance::join(&mut pool.reserve_b, balance_b);
+    let reserve_a = balance::value(&pool.reserve_a);
+    let reserve_b = balance::value(&pool.reserve_b);
 
-    let amount_a = balance::value(&pool.reserve_a);
-    let amount_b = balance::value(&pool.reserve_b);
+    let total_lp = balance::supply_value(&pool.lp_supply);
 
-    let liquidity = min(amount_a, amount_b);
+    // Convert coins to balances
+    let bal_a = coin::into_balance(coin_a);
+    let bal_b = coin::into_balance(coin_b);
 
+    // Determine LP to mint
+    let liquidity = if (total_lp == 0) {
+        // First liquidity provider
+        min(amount_a, amount_b)
+    } else {
+        min(
+            amount_a * total_lp / reserve_a,
+            amount_b * total_lp / reserve_b,
+        )
+    };
+
+    // Update reserves
+    balance::join(&mut pool.reserve_a, bal_a);
+    balance::join(&mut pool.reserve_b, bal_b);
+
+    // Mint LP tokens
     let lp_balance = balance::increase_supply(&mut pool.lp_supply, liquidity);
-    let lp_token = coin::from_balance(lp_balance, ctx);
+    let lp_coin = coin::from_balance(lp_balance, ctx);
 
-    lp_token
+    event::emit(LiquidityAdded {
+        lp_id: object::id(pool),
+        amount_a,
+        amount_b,
+        lp_minted: liquidity,
+    });
+
+    lp_coin
 }
 
 /// Remove liquidity from the pool
+
 public fun remove_liquidity<A, B>(
     pool: &mut LiquidityPool<A, B>,
     lp_token: Coin<LP<A, B>>,
     ctx: &mut TxContext,
 ): (Coin<A>, Coin<B>) {
-    // Convert LP token to balance
     let lp_balance = coin::into_balance(lp_token);
-
-    // Get the amount of LP tokens being burned
     let liquidity = balance::value(&lp_balance);
 
-    // Calculate the share of reserves to return
     let reserve_a = balance::value(&pool.reserve_a);
     let reserve_b = balance::value(&pool.reserve_b);
     let total_lp = balance::supply_value(&pool.lp_supply);
 
-    // amount_a = liquidity * reserve_a / total_lp
-    // amount_b = liquidity * reserve_b / total_lp
     let amount_a = liquidity * reserve_a / total_lp;
     let amount_b = liquidity * reserve_b / total_lp;
 
-    // Remove the share from reserves
     let out_a = balance::split(&mut pool.reserve_a, amount_a);
     let out_b = balance::split(&mut pool.reserve_b, amount_b);
 
-    // Burn the LP tokens (decrease supply)
     balance::decrease_supply(&mut pool.lp_supply, lp_balance);
 
-    // Convert balances to coins and return
+    // Update k
+    let new_a = balance::value(&pool.reserve_a);
+    let new_b = balance::value(&pool.reserve_b);
+    pool.k_last = new_a * new_b;
+
     let coin_a = coin::from_balance(out_a, ctx);
     let coin_b = coin::from_balance(out_b, ctx);
+
+    event::emit(LiquidityRemoved {
+        lp_id: object::id(pool),
+        amount_a,
+        amount_b,
+        lp_burned: liquidity,
+    });
 
     (coin_a, coin_b)
 }
