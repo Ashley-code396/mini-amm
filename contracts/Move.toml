@@ -19,6 +19,7 @@ edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
 
 [addresses]
 mini_amm = "0x0"
+treasury = "0xbfc4b4683979ca4d1656c1eb445af584d87526a99b5d49c8c9921ff84163c565"
 
 # Named addresses will be accessible in Move as `@name`. They're also exported:
 # for example, `std = "0x1"` is exported by the Standard Library.
