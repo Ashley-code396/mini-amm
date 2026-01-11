@@ -13,7 +13,7 @@ export default function Navbar({ activeTab = 'swap', onTabChange }: NavbarProps)
   return (
     <header className="bg-[#121212] border-b border-gray-800">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center h-16">
+        <div className="flex items-center h-16 justify-between">
           <nav className="flex space-x-8">
             <button
               onClick={() => onTabChange?.('swap')}
@@ -71,11 +71,11 @@ export default function Navbar({ activeTab = 'swap', onTabChange }: NavbarProps)
               Transaction
             </button>
           </nav>
-        </div>
-        <div className="flex items-center gap-4">
-          <button className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-            Connect Wallet
-          </button>
+          <div className="flex items-center gap-4">
+            <button className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+              Connect Wallet
+            </button>
+          </div>
         </div>
       </div>
     </header>
