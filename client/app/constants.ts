@@ -1,1 +1,1 @@
-export const TESTNET_PACKAGE_ID= '0x@';
+export const TESTNET_PACKAGE_ID= '0xa42ede572ddb831b3b6a62b75e464c56490e10080721907e15c5ed4cff1a6466';
