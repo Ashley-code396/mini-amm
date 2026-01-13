@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Transaction } from "@mysten/sui/transactions";
-import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
-import { SuiObjectResponse } from "@mysten/sui/client";
+import { 
+  useSignAndExecuteTransaction, 
+  useSuiClient, 
+  useCurrentAccount,
+  useSuiClientQuery,
+  useSuiClientContext
+} from "@mysten/dapp-kit";
+import { SuiObjectResponse, SuiObjectData } from "@mysten/sui/client";
 import { TESTNET_PACKAGE_ID } from "../constants";
 
 type PoolSummary = {
@@ -24,6 +30,53 @@ type UserCoin = {
 };
 
 export default function PoolInterface() {
+  const client = useSuiClient();
+  const account = useCurrentAccount();
+  const { network } = useSuiClientContext();
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const [isConnected, setIsConnected] = useState(false);
+  
+  // Fetch user's coins when account changes
+  useEffect(() => {
+    const fetchUserCoins = async () => {
+      if (!account?.address) {
+        setUserCoins([]);
+        return;
+      }
+
+      try {
+        const allCoins = await client.getAllCoins({
+          owner: account.address,
+        });
+
+        // Filter and map coins to UserCoin format
+        const userCoinsData = allCoins.data
+          .filter(coin => coin.coinType !== '0x2::sui::SUI') // Filter out SUI if needed
+          .map(coin => ({
+            type: coin.coinType,
+            objectId: coin.coinObjectId,
+            balance: Number(coin.balance) / 1e9, // Adjust decimal places as needed
+          }));
+
+        setUserCoins(userCoinsData);
+        console.log('Fetched user coins:', userCoinsData);
+      } catch (error) {
+        console.error('Error fetching user coins:', error);
+        setUserCoins([]);
+      }
+    };
+
+    fetchUserCoins();
+    
+    // Set up a refresh interval
+    const interval = setInterval(fetchUserCoins, 10000); // Refresh every 10 seconds
+    return () => clearInterval(interval);
+  }, [account?.address, client]);
+  
+  // Update connection status when account changes
+  useEffect(() => {
+    setIsConnected(!!account?.address);
+  }, [account]);
   const [searchQuery, setSearchQuery] = useState("");
   const [pools, setPools] = useState<PoolSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -46,6 +99,15 @@ export default function PoolInterface() {
   const [ratioPercent, setRatioPercent] = useState(100);
   const [totalLiquidity, setTotalLiquidity] = useState("0");
   const [userCoins, setUserCoins] = useState<UserCoin[]>([]);
+  const [tokenSymbols, setTokenSymbols] = useState<string[]>([]);
+
+  // Update token symbols when userCoins change
+  useEffect(() => {
+    const symbols = Array.from(new Set(userCoins
+      .map((c) => tokenSymbol(c.type))
+      .filter(Boolean))).sort();
+    setTokenSymbols(symbols);
+  }, [userCoins]);
 
   // Helper: derive short token symbol from coin type string
   function tokenSymbol(type: string) {
@@ -77,8 +139,8 @@ export default function PoolInterface() {
     if (coinB) setAmountTokenB(String(Math.floor((coinB.balance * p) / 100)));
   }
 
-  const { signAndExecuteTransaction, account, connected } =
-    useSignAndExecuteTransaction() as any;
+  const { mutate: signAndExecuteTransaction, isPending: isTransactionPending } = useSignAndExecuteTransaction();
+  const connected = !!account?.address;
   const suiClient = useSuiClient();
 
   // =================== Fetch Pools ===================
@@ -244,6 +306,20 @@ export default function PoolInterface() {
     fetchCoins();
   }, [account, suiClient]);
 
+  // Update token symbols when userCoins changes
+  useEffect(() => {
+    if (userCoins.length > 0) {
+      const symbols = new Set<string>();
+      userCoins.forEach((coin) => {
+        const symbol = tokenSymbol(coin.type);
+        if (symbol) symbols.add(symbol);
+      });
+      setTokenSymbols(Array.from(symbols));
+    } else {
+      setTokenSymbols([]);
+    }
+  }, [userCoins]);
+
   // =================== Pool Filtering ===================
   const filteredPools = pools.filter((pool) =>
     `${pool.token1}/${pool.token2}`.toLowerCase().includes(searchQuery.toLowerCase())
@@ -270,7 +346,7 @@ export default function PoolInterface() {
         ],
       });
 
-      const result = await signAndExecuteTransaction({ transactionBlock: tx });
+      const result = await signAndExecuteTransaction({ transaction: tx });
       console.log("Add Liquidity Result:", result);
       alert("Liquidity added successfully!");
     } catch (e) {
@@ -297,7 +373,7 @@ export default function PoolInterface() {
         ],
       });
 
-      const result = await signAndExecuteTransaction({ transactionBlock: tx });
+      const result = await signAndExecuteTransaction({ transaction: tx });
       console.log("Remove Liquidity Result:", result);
       alert("Liquidity removed successfully!");
     } catch (e) {
@@ -319,21 +395,24 @@ export default function PoolInterface() {
       const tx = new Transaction();
 
       // 1. Fetch container object
-      const anyClient = suiClient as any;
-      let containerObjects: SuiObjectResponse[] = [];
-      if (typeof anyClient.getObjectsOwnedByPackage === "function") {
-        containerObjects = await anyClient.getObjectsOwnedByPackage(TESTNET_PACKAGE_ID);
-      }
-      const containerObj = containerObjects.find((obj) =>
-        obj.data?.type?.includes("mini_amm::Container")
-      );
-      if (!containerObj) return alert("AMM container not found");
+      const containerObjects = await suiClient.getOwnedObjects({
+        owner: account.address,
+        filter: {
+          StructType: `${TESTNET_PACKAGE_ID}::mini_amm::Container`
+        },
+        options: {
+          showType: true,
+          showContent: true,
+          showOwner: true
+        }
+      });
 
-      const containerId =
-        (containerObj as any).objectId ??
-        containerObj.data?.objectId ??
-        (containerObj as any).reference?.objectId ??
-        "";
+      if (!containerObjects.data || containerObjects.data.length === 0) {
+        return alert("AMM container not found. Make sure the AMM has been initialized.");
+      }
+
+      const containerId = containerObjects.data[0].data?.objectId;
+      if (!containerId) return alert("Invalid container ID");
 
       // 2. Fetch user's selected coin objects
       if (!selectedCoinAId || !selectedCoinBId) return alert("Select specific coin objects for both tokens");
@@ -360,7 +439,7 @@ export default function PoolInterface() {
         arguments: [tx.object(containerId), splitA, splitB],
       });
 
-      const result = await signAndExecuteTransaction({ transactionBlock: tx });
+      const result = await signAndExecuteTransaction({ transaction: tx });
       console.log("Pool Created:", result);
       alert("Pool created successfully!");
 
@@ -382,8 +461,15 @@ export default function PoolInterface() {
   }
 
   // =================== JSX ===================
-  // derive unique token symbols owned by user (friendly labels)
-  const tokenSymbols = Array.from(new Set(userCoins.map((c) => tokenSymbol(c.type)).filter(Boolean)));
+  // tokenSymbols is now managed by the useState hook and useEffect above
+  
+  // Debug log to check connection status and tokens
+  useEffect(() => {
+    console.log('Wallet connected:', isConnected);
+    console.log('Account:', account);
+    console.log('User coins:', userCoins);
+    console.log('Token symbols:', tokenSymbols);
+  }, [isConnected, account, userCoins, tokenSymbols]);
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-6">
       {/* Create Pool Button */}
@@ -470,8 +556,10 @@ export default function PoolInterface() {
             <h3 className="text-lg font-medium mb-4">Create New Pool</h3>
 
             <label>Token 1 (type)</label>
-            {tokenSymbols.length === 0 ? (
-              <div className="mb-3 text-sm text-muted-foreground">{connected ? "No tokens found in wallet" : "Connect your wallet to list tokens"}</div>
+            {!connected ? (
+              <div className="mb-3 text-sm text-muted-foreground">Connect your wallet to list tokens</div>
+            ) : tokenSymbols.length === 0 ? (
+              <div className="mb-3 text-sm text-muted-foreground">No supported tokens found in your wallet</div>
             ) : (
               <select
                 className="w-full mb-2 p-2 border rounded"
@@ -546,8 +634,10 @@ export default function PoolInterface() {
             )}
 
             <label>Token 2 (type)</label>
-            {tokenSymbols.length === 0 ? (
-              <div className="mb-3 text-sm text-muted-foreground">{connected ? "No tokens found in wallet" : "Connect your wallet to list tokens"}</div>
+            {!connected ? (
+              <div className="mb-3 text-sm text-muted-foreground">Connect your wallet to list tokens</div>
+            ) : tokenSymbols.length === 0 ? (
+              <div className="mb-3 text-sm text-muted-foreground">No supported tokens found in your wallet</div>
             ) : (
               <select
                 className="w-full mb-2 p-2 border rounded"
