@@ -458,8 +458,15 @@ export default function PoolInterface() {
 
       {/* =================== Create Pool Modal =================== */}
       {showCreateForm &&
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999]" style={{ zIndex: 9999 }}>
-          <div className="bg-card rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 overflow-auto">
+          <div className="bg-card rounded-lg p-6 w-full max-w-md mx-4 my-8 relative">
+            <button 
+              onClick={() => setShowCreateForm(false)}
+              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
+              aria-label="Close modal"
+            >
+              ✕
+            </button>
             <h3 className="text-lg font-medium mb-4">Create New Pool</h3>
 
             <label>Token 1 (type)</label>
