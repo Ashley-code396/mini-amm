@@ -14,10 +14,22 @@ export const startPoolEventCron = async () => {
     where: { id: EVENT_ID },
   });
 
-  // apiCursor is passed to the indexer and expects eventSeq as a string
-  let apiCursor = lastCursorRecord
-    ? { txDigest: lastCursorRecord.txDigest, eventSeq: lastCursorRecord.eventSeq.toString() }
-    : null;
+// apiCursor is passed to the indexer and expects eventSeq as a string
+interface ApiCursor {
+    txDigest: string;
+    eventSeq: string;
+}
+
+interface DBEventCursor {
+    id: string;
+    txDigest: string;
+    eventSeq: number | null;
+}
+
+let apiCursor: ApiCursor | null = null;
+  if (lastCursorRecord && lastCursorRecord.eventSeq != null && lastCursorRecord.txDigest != null) {
+    apiCursor = { txDigest: lastCursorRecord.txDigest, eventSeq: lastCursorRecord.eventSeq.toString() };
+  }
 
   // Run every 15 seconds
   cron.schedule("*/15 * * * * *", async () => {

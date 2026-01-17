@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import http from "http";
-import app from "../app"; // use ES import to match your app.ts
+
+import app from "../app.ts"; 
 
 const port = process.env.PORT || 3009;
 app.set("port", port);
