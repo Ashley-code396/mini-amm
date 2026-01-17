@@ -1,0 +1,51 @@
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  
+}
+
+/// Tracks Sui events emitted by mini_amm::pool
+model poolEvent {
+  id        Int      @id @default(autoincrement())
+  digest    String   @unique              // txDigest of the event
+  type      String                           // Event type (Move event type)
+  sender    String?                          // Optional sender address
+  payload   Json                              // Full parsed JSON payload
+  timestamp BigInt                            // Event timestamp in ms
+  processed Boolean @default(false)          // Has this event been processed into pool record?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Stores pool state derived from events
+model pool {
+  id        Int      @id @default(autoincrement())
+  poolId    String   @unique               // Pool object ID on-chain
+  reserveA  BigInt                              // Reserve of token A
+  reserveB  BigInt                              // Reserve of token B
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Stores last processed cursor for each event type
+model eventCursor {
+  id        String   @id                     // e.g., "poolEvents"
+  txDigest  String?                           // Last txDigest processed
+  eventSeq  Int?                              // Last event sequence number, optional
+  updatedAt DateTime @updatedAt
+}
+
+
+
+
+
+
+
+
+
