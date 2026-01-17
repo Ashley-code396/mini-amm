@@ -7,6 +7,7 @@ import logger from 'morgan';
 
 // import indexRouter from './routes/index';
 // import usersRouter from './routes/users';
+import poolsRouter from './routes/pools';
 
 import { startPoolEventCron } from './crons/poolEventCron';
 import { prisma } from './prisma/prismaClient';
@@ -22,6 +23,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // app.use('/', indexRouter);
 // app.use('/users', usersRouter);
+app.use('/api/pools', poolsRouter);
 
 // catch 404 and forward to error handler
 app.use((req: Request, res: Response, next: NextFunction) => {
