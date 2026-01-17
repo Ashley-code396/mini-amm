@@ -1,2 +1,3 @@
 export const TESTNET_PACKAGE_ID= '0x1b06f57e6ad51a62e70478550a6a4be2b661ecfa70df9f68b8aecafa25e6d60e';
 export const CONTAINER_ID = '0x46937b3107d25ce72a31cf157efd60dcb57e3a10231be1f7576be67ca2fe25ac';
+export const BACKEND_URL=process.env.NEXT_PUBLIC_BACKEND_URL;

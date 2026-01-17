@@ -9,6 +9,7 @@ import {
 } from "@mysten/dapp-kit";
 
 import { TESTNET_PACKAGE_ID, CONTAINER_ID } from "../constants";
+import { BACKEND_URL } from "../constants";
 
 
 type PoolSummary = {
@@ -129,81 +130,47 @@ export default function PoolInterface() {
 
   // Fetch pools from the Container's Bag
   useEffect(() => {
-    async function fetchPools() {
-      if (!CONTAINER_ID || String(CONTAINER_ID) === "0xYOUR_CONTAINER_ID") {
-        console.warn("Container ID not configured");
+  async function fetchPools() {
+    setLoading(true);
+    try {
+      if (!BACKEND_URL) {
+        console.warn("Backend URL not configured");
         setPools([]);
         return;
       }
 
-      setLoading(true);
-      try {
-        // Get the Container object
-        const containerObj = await client.getObject({
-          id: CONTAINER_ID,
-          options: {
-            showContent: true,
-            showType: true,
-          }
-        });
+      const res = await fetch(`${BACKEND_URL}/api/pools`);
+      const json = await res.json();
 
-        if (!containerObj.data?.content || containerObj.data.content.dataType !== 'moveObject') {
-          setPools([]);
-          return;
-        }
-
-        // Get dynamic fields (pools in the Bag)
-        const dynamicFields = await client.getDynamicFields({
-          parentId: CONTAINER_ID,
-        });
-
-        const poolPromises = dynamicFields.data.map(async (field) => {
-          try {
-            const poolObj = await client.getObject({
-              id: field.objectId,
-              options: { showContent: true, showType: true }
-            });
-
-            if (!poolObj.data?.type) return null;
-
-            // Extract type arguments from pool type
-            const typeMatch = poolObj.data.type.match(/<(.+), (.+)>/);
-            if (!typeMatch) return null;
-
-            const [, token1Type, token2Type] = typeMatch;
-
-            return {
-              id: field.objectId,
-              token1: token1Type,
-              token2: token2Type,
-              price: "—",
-              apr: "—",
-              fee: "—",
-              volume: "—"
-            } as PoolSummary;
-          } catch (e) {
-            console.error("Error fetching pool:", e);
-            return null;
-          }
-        });
-
-        const fetchedPools = (await Promise.all(poolPromises)).filter(
-          (p): p is PoolSummary => p !== null
-        );
-
-        setPools(fetchedPools);
-      } catch (e) {
-        console.error("Failed to load pools", e);
+      if (!json.success || !Array.isArray(json.data)) {
         setPools([]);
-      } finally {
-        setLoading(false);
+        return;
       }
-    }
 
-    fetchPools();
-    const interval = setInterval(fetchPools, 15000);
-    return () => clearInterval(interval);
-  }, [client]);
+      // Map the DB pools to PoolSummary type
+      const mappedPools: PoolSummary[] = json.data.map((pool: any) => ({
+        id: pool.id,
+        token1: pool.token1,
+        token2: pool.token2,
+        price: pool.price ?? "—",
+        apr: pool.apr ?? "—",
+        fee: pool.fee ?? "—",
+        volume: pool.volume ?? "—",
+      }));
+
+      setPools(mappedPools);
+    } catch (err) {
+      console.error("Failed to fetch pools from backend:", err);
+      setPools([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  fetchPools();
+  const interval = setInterval(fetchPools, 15000); // optional polling
+  return () => clearInterval(interval);
+}, []);
 
   // Get coins to use for transaction (merges multiple coin objects if needed)
   function selectCoinsForAmount(tokenSymbol: string, amount: number): string[] {
