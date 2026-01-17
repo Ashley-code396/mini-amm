@@ -1,4 +1,3 @@
-// poolIndexer.ts
 import { EventId, SuiEvent, SuiEventFilter } from "@mysten/sui/client";
 import { client } from "./suiClient";
 import { prisma } from "../prisma/prismaClient";
@@ -50,7 +49,8 @@ export const getPoolEvents = async ({
 // --- Save events to DB ---
 export const saveEventsToDB = async (events: SuiEvent[]) => {
   for (const ev of events) {
-    const payload = ev.parsedJson as unknown as InputJsonValue; // Prisma-compatible JSON
+    // cast parsedJson to Prisma-compatible JSON
+    const payload = ev.parsedJson as unknown as InputJsonValue;
 
     console.log("Saving pool event:", ev.id.txDigest);
 
@@ -73,7 +73,7 @@ export const saveEventsToDB = async (events: SuiEvent[]) => {
 export const getPoolsFromEvents = async () => {
   const events = await prisma.poolEvent.findMany({ where: { processed: false } });
 
-  const pools = events.map((ev) => {
+  return events.map((ev) => {
     const payload = ev.payload as unknown as PoolEventPayload;
 
     return {
@@ -90,8 +90,6 @@ export const getPoolsFromEvents = async () => {
       timestamp: Number(ev.timestamp),
     };
   });
-
-  return pools;
 };
 
 // --- Save processed pools ---
@@ -127,33 +125,4 @@ export const savePoolsToDB = async (pools: {
     where: { processed: false },
     data: { processed: true },
   });
-};
-
-// --- Cron job to fetch and process events ---
-export const startPoolEventCron = async (cursor?: EventId | null) => {
-  let nextCursor = cursor ?? null;
-
-  const fetchAndProcess = async () => {
-    try {
-      const { data: events, nextCursor: newCursor } = await getPoolEvents({
-        cursor: nextCursor,
-      });
-
-      if (events.length > 0) {
-        await saveEventsToDB(events);
-
-        const pools = await getPoolsFromEvents();
-        await savePoolsToDB(pools);
-      }
-
-      nextCursor = newCursor ?? nextCursor;
-    } catch (err) {
-      console.error("Error processing pool events:", err);
-    }
-
-    // Poll every 5 seconds
-    setTimeout(fetchAndProcess, 5000);
-  };
-
-  fetchAndProcess();
 };
