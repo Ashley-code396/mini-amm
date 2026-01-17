@@ -1,7 +1,17 @@
+// poolIndexer.ts
 import { EventId, SuiEvent, SuiEventFilter } from "@mysten/sui/client";
 import { client } from "./suiClient";
 import { prisma } from "../prisma/prismaClient";
 import { packageId } from "../config/network";
+import { InputJsonValue } from "@prisma/client/runtime/client";
+import { PoolEventPayload } from "../types/poolEvents";
+
+// Event types to track
+const POOL_EVENT_TYPES = [
+  "PoolInitialized",
+  "LiquidityAdded",
+  "LiquidityRemoved",
+] as const;
 
 // --- Fetch pool events from chain ---
 export const getPoolEvents = async ({
@@ -11,32 +21,39 @@ export const getPoolEvents = async ({
   cursor?: EventId | null;
   limit?: number;
 }) => {
-  const filter: SuiEventFilter = {
-    MoveEventType: [
-      `${packageId}::mini_amm::PoolInitialized`,
-      `${packageId}::mini_amm::LiquidityAdded`,
-      `${packageId}::mini_amm::LiquidityRemoved`,
-    ],
-  };
+  let allEvents: SuiEvent[] = [];
+  let nextCursor = cursor;
 
-  const eventsResult = await client.queryEvents({
-    query: filter,
-    cursor,
-    limit,
-    order: "ascending",
-  });
+  for (const eventName of POOL_EVENT_TYPES) {
+    const filter: SuiEventFilter = {
+      MoveEventType: `${packageId}::pool::${eventName}`,
+    };
+
+    const eventsResult = await client.queryEvents({
+      query: filter,
+      cursor: nextCursor,
+      limit,
+      order: "ascending",
+    });
+
+    allEvents = allEvents.concat(eventsResult.data as SuiEvent[]);
+    nextCursor = eventsResult.nextCursor ?? nextCursor;
+  }
 
   return {
-    data: eventsResult.data as SuiEvent[],
-    nextCursor: eventsResult.nextCursor,
-    hasNextPage: eventsResult.hasNextPage,
+    data: allEvents,
+    nextCursor,
+    hasNextPage: false,
   };
 };
 
 // --- Save events to DB ---
 export const saveEventsToDB = async (events: SuiEvent[]) => {
   for (const ev of events) {
+    const payload = ev.parsedJson as unknown as InputJsonValue; // Prisma-compatible JSON
+
     console.log("Saving pool event:", ev.id.txDigest);
+
     await prisma.poolEvent.upsert({
       where: { digest: ev.id.txDigest },
       update: {},
@@ -44,48 +61,99 @@ export const saveEventsToDB = async (events: SuiEvent[]) => {
         digest: ev.id.txDigest,
         type: ev.type,
         sender: ev.sender ?? null,
-        payload: ev.parsedJson,
+        payload,
         timestamp: Number(ev.timestampMs),
+        processed: false,
       },
     });
   }
 };
 
-// --- Process pools from events ---
+// --- Process unprocessed events into pools ---
 export const getPoolsFromEvents = async () => {
-  const events = await prisma.poolEvent.findMany();
-  const pools = events.map((ev) => ({
-    lp_id: ev.payload.lp_id,
-    type: ev.type,
-    amount_a: ev.payload.amount_a,
-    amount_b: ev.payload.amount_b,
-    lp_change: ev.payload.lp_minted ?? ev.payload.lp_burned ?? 0,
-    timestamp: ev.timestamp,
-  }));
+  const events = await prisma.poolEvent.findMany({ where: { processed: false } });
+
+  const pools = events.map((ev) => {
+    const payload = ev.payload as unknown as PoolEventPayload;
+
+    return {
+      lp_id: "lp_id" in payload ? payload.lp_id : null,
+      type: ev.type,
+      amount_a: "amount_a" in payload ? payload.amount_a : 0,
+      amount_b: "amount_b" in payload ? payload.amount_b : 0,
+      lp_change:
+        "lp_minted" in payload
+          ? payload.lp_minted
+          : "lp_burned" in payload
+          ? payload.lp_burned
+          : 0,
+      timestamp: Number(ev.timestamp),
+    };
+  });
+
   return pools;
 };
 
 // --- Save processed pools ---
-export const savePoolsToDB = async (pools: any[]) => {
+export const savePoolsToDB = async (pools: {
+  lp_id: string | null;
+  type: string;
+  amount_a: number;
+  amount_b: number;
+  lp_change: number;
+  timestamp: number;
+}[]) => {
   for (const pool of pools) {
+    if (!pool.lp_id) continue;
+
     console.log("Saving pool:", pool.lp_id);
+
     await prisma.pool.upsert({
-      where: { lp_id: pool.lp_id },
+      where: { poolId: pool.lp_id },
       update: {
-        type: pool.type,
-        amount_a: pool.amount_a,
-        amount_b: pool.amount_b,
-        lp_change: pool.lp_change,
-        timestamp: pool.timestamp,
+        reserveA: pool.amount_a,
+        reserveB: pool.amount_b,
       },
       create: {
-        lp_id: pool.lp_id,
-        type: pool.type,
-        amount_a: pool.amount_a,
-        amount_b: pool.amount_b,
-        lp_change: pool.lp_change,
-        timestamp: pool.timestamp,
+        poolId: pool.lp_id,
+        reserveA: pool.amount_a,
+        reserveB: pool.amount_b,
       },
     });
   }
+
+  // Mark events as processed
+  await prisma.poolEvent.updateMany({
+    where: { processed: false },
+    data: { processed: true },
+  });
+};
+
+// --- Cron job to fetch and process events ---
+export const startPoolEventCron = async (cursor?: EventId | null) => {
+  let nextCursor = cursor ?? null;
+
+  const fetchAndProcess = async () => {
+    try {
+      const { data: events, nextCursor: newCursor } = await getPoolEvents({
+        cursor: nextCursor,
+      });
+
+      if (events.length > 0) {
+        await saveEventsToDB(events);
+
+        const pools = await getPoolsFromEvents();
+        await savePoolsToDB(pools);
+      }
+
+      nextCursor = newCursor ?? nextCursor;
+    } catch (err) {
+      console.error("Error processing pool events:", err);
+    }
+
+    // Poll every 5 seconds
+    setTimeout(fetchAndProcess, 5000);
+  };
+
+  fetchAndProcess();
 };
