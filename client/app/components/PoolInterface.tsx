@@ -8,7 +8,8 @@ import {
   useCurrentAccount,
 } from "@mysten/dapp-kit";
 
-import { TESTNET_PACKAGE_ID } from "../constants";
+import { TESTNET_PACKAGE_ID, CONTAINER_ID } from "../constants";
+
 
 type PoolSummary = {
   id: string;
@@ -126,13 +127,71 @@ export default function PoolInterface() {
     return () => clearInterval(interval);
   }, [account?.address, client]);
 
-  // Fetch pools
+  // Fetch pools from the Container's Bag
   useEffect(() => {
     async function fetchPools() {
+      if (!CONTAINER_ID || String(CONTAINER_ID) === "0xYOUR_CONTAINER_ID") {
+        console.warn("Container ID not configured");
+        setPools([]);
+        return;
+      }
+
       setLoading(true);
       try {
-        // Your existing pool fetching logic
-        setPools([]);
+        // Get the Container object
+        const containerObj = await client.getObject({
+          id: CONTAINER_ID,
+          options: {
+            showContent: true,
+            showType: true,
+          }
+        });
+
+        if (!containerObj.data?.content || containerObj.data.content.dataType !== 'moveObject') {
+          setPools([]);
+          return;
+        }
+
+        // Get dynamic fields (pools in the Bag)
+        const dynamicFields = await client.getDynamicFields({
+          parentId: CONTAINER_ID,
+        });
+
+        const poolPromises = dynamicFields.data.map(async (field) => {
+          try {
+            const poolObj = await client.getObject({
+              id: field.objectId,
+              options: { showContent: true, showType: true }
+            });
+
+            if (!poolObj.data?.type) return null;
+
+            // Extract type arguments from pool type
+            const typeMatch = poolObj.data.type.match(/<(.+), (.+)>/);
+            if (!typeMatch) return null;
+
+            const [, token1Type, token2Type] = typeMatch;
+
+            return {
+              id: field.objectId,
+              token1: token1Type,
+              token2: token2Type,
+              price: "—",
+              apr: "—",
+              fee: "—",
+              volume: "—"
+            } as PoolSummary;
+          } catch (e) {
+            console.error("Error fetching pool:", e);
+            return null;
+          }
+        });
+
+        const fetchedPools = (await Promise.all(poolPromises)).filter(
+          (p): p is PoolSummary => p !== null
+        );
+
+        setPools(fetchedPools);
       } catch (e) {
         console.error("Failed to load pools", e);
         setPools([]);
@@ -140,7 +199,10 @@ export default function PoolInterface() {
         setLoading(false);
       }
     }
+
     fetchPools();
+    const interval = setInterval(fetchPools, 15000);
+    return () => clearInterval(interval);
   }, [client]);
 
   // Get coins to use for transaction (merges multiple coin objects if needed)
@@ -166,6 +228,15 @@ export default function PoolInterface() {
   // Create Pool Handler
   async function handleCreatePool() {
     if (!account?.address) return alert("Connect wallet first");
+    
+    // Validate configuration
+    if (!TESTNET_PACKAGE_ID || String(TESTNET_PACKAGE_ID) === "0xYOUR_PACKAGE_ID") {
+      return alert("Package ID not configured. Please update TESTNET_PACKAGE_ID in the code.");
+    }
+    if (!CONTAINER_ID || String(CONTAINER_ID) === "0xYOUR_CONTAINER_ID") {
+      return alert("Container ID not configured. Please update CONTAINER_ID in the code.");
+    }
+    
     if (!selectedToken1 || !selectedToken2) return alert("Select both tokens");
     
     const amt1 = parseFloat(amount1);
@@ -185,20 +256,6 @@ export default function PoolInterface() {
     try {
       const tx = new Transaction();
 
-      // Get container
-      const containerObjects = await client.getOwnedObjects({
-        owner: account.address,
-        filter: { StructType: `${TESTNET_PACKAGE_ID}::mini_amm::Container` },
-        options: { showType: true, showContent: true, showOwner: true }
-      });
-
-      if (!containerObjects.data?.length) {
-        return alert("AMM container not found");
-      }
-
-      const containerId = containerObjects.data[0].data?.objectId;
-      if (!containerId) return alert("Invalid container ID");
-
       // Select and merge coins for token 1
       const coins1 = selectCoinsForAmount(selectedToken1, amt1);
       const coins2 = selectCoinsForAmount(selectedToken2, amt2);
@@ -212,27 +269,37 @@ export default function PoolInterface() {
       if (coins1.length > 1) {
         tx.mergeCoins(coin1Arg, coins1.slice(1).map(id => tx.object(id)));
       }
-      const [splitCoin1] = tx.splitCoins(coin1Arg, [tx.pure.u64(amt1 * 1e9)]);
+      const [splitCoin1] = tx.splitCoins(coin1Arg, [tx.pure.u64(Math.floor(amt1 * 1e9))]);
 
       let coin2Arg = tx.object(coins2[0]);
       if (coins2.length > 1) {
         tx.mergeCoins(coin2Arg, coins2.slice(1).map(id => tx.object(id)));
       }
-      const [splitCoin2] = tx.splitCoins(coin2Arg, [tx.pure.u64(amt2 * 1e9)]);
+      const [splitCoin2] = tx.splitCoins(coin2Arg, [tx.pure.u64(Math.floor(amt2 * 1e9))]);
 
       tx.moveCall({
         target: `${TESTNET_PACKAGE_ID}::mini_amm::create_pool`,
         typeArguments: [token1Data.type, token2Data.type],
-        arguments: [tx.object(containerId), splitCoin1, splitCoin2],
+        arguments: [tx.object(CONTAINER_ID), splitCoin1, splitCoin2],
       });
 
-      await signAndExecuteTransaction({ transaction: tx });
-      alert("Pool created successfully!");
-      setShowCreateForm(false);
-      setSelectedToken1("");
-      setSelectedToken2("");
-      setAmount1("");
-      setAmount2("");
+      await signAndExecuteTransaction(
+        { transaction: tx },
+        {
+          onSuccess: () => {
+            alert("Pool created successfully!");
+            setShowCreateForm(false);
+            setSelectedToken1("");
+            setSelectedToken2("");
+            setAmount1("");
+            setAmount2("");
+          },
+          onError: (error) => {
+            console.error(error);
+            alert("Failed to create pool: " + error.message);
+          }
+        }
+      );
     } catch (e) {
       console.error(e);
       alert("Failed to create pool: " + (e as any).message);
@@ -270,13 +337,13 @@ export default function PoolInterface() {
       if (coins1.length > 1) {
         tx.mergeCoins(coin1Arg, coins1.slice(1).map(id => tx.object(id)));
       }
-      const [splitCoin1] = tx.splitCoins(coin1Arg, [tx.pure.u64(amt1 * 1e9)]);
+      const [splitCoin1] = tx.splitCoins(coin1Arg, [tx.pure.u64(Math.floor(amt1 * 1e9))]);
 
       let coin2Arg = tx.object(coins2[0]);
       if (coins2.length > 1) {
         tx.mergeCoins(coin2Arg, coins2.slice(1).map(id => tx.object(id)));
       }
-      const [splitCoin2] = tx.splitCoins(coin2Arg, [tx.pure.u64(amt2 * 1e9)]);
+      const [splitCoin2] = tx.splitCoins(coin2Arg, [tx.pure.u64(Math.floor(amt2 * 1e9))]);
 
       tx.moveCall({
         target: `${TESTNET_PACKAGE_ID}::pool::add_liquidity`,
@@ -284,11 +351,21 @@ export default function PoolInterface() {
         arguments: [tx.object(selectedPool.id), splitCoin1, splitCoin2],
       });
 
-      await signAndExecuteTransaction({ transaction: tx });
-      alert("Liquidity added successfully!");
-      setShowAddForm(false);
-      setAddAmount1("");
-      setAddAmount2("");
+      await signAndExecuteTransaction(
+        { transaction: tx },
+        {
+          onSuccess: () => {
+            alert("Liquidity added successfully!");
+            setShowAddForm(false);
+            setAddAmount1("");
+            setAddAmount2("");
+          },
+          onError: (error) => {
+            console.error(error);
+            alert("Failed to add liquidity: " + error.message);
+          }
+        }
+      );
     } catch (e) {
       console.error(e);
       alert("Failed to add liquidity: " + (e as any).message);
@@ -300,16 +377,33 @@ export default function PoolInterface() {
   );
 
   const connected = !!account?.address;
+  const isConfigured =
+    String(TESTNET_PACKAGE_ID) !== "0xYOUR_PACKAGE_ID" &&
+    String(CONTAINER_ID) !== "0xYOUR_CONTAINER_ID";
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-6">
+      {/* Configuration Warning */}
+      {!isConfigured && (
+        <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+          <div className="font-bold text-yellow-600 mb-2">⚠️ Configuration Required</div>
+          <div className="text-sm text-yellow-700">
+            Please update the following constants in the code:
+            <ul className="list-disc ml-6 mt-2">
+              <li><code className="bg-yellow-100 px-1 rounded">TESTNET_PACKAGE_ID</code> - Your deployed package ID</li>
+              <li><code className="bg-yellow-100 px-1 rounded">CONTAINER_ID</code> - Your Container object ID</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6 flex justify-between items-center">
         <h1 className="text-2xl font-bold">Liquidity Pools</h1>
         <button
-          className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+          className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => setShowCreateForm(true)}
-          disabled={!connected}
+          disabled={!connected || !isConfigured}
         >
           + Create Pool
         </button>
@@ -326,6 +420,13 @@ export default function PoolInterface() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Connection Prompt */}
+      {!connected && (
+        <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-center">
+          <div className="text-blue-700">Connect your wallet to view and manage liquidity pools</div>
         </div>
       )}
 
@@ -352,7 +453,9 @@ export default function PoolInterface() {
         {loading && <div className="p-8 text-center text-muted-foreground">Loading pools...</div>}
         {!loading && filteredPools.length === 0 && (
           <div className="p-8 text-center text-muted-foreground">
-            No pools found. Create your first pool to get started!
+            {isConfigured 
+              ? "No pools found. Create your first pool to get started!"
+              : "Configure the contract IDs above to view pools."}
           </div>
         )}
 
@@ -372,13 +475,13 @@ export default function PoolInterface() {
                   {getTokenSymbol(pool.token1)}/{getTokenSymbol(pool.token2)}
                 </div>
               </div>
-              <div className="col-span-2 text-right text-sm">{pool.price ?? "—"}</div>
-              <div className="col-span-2 text-right text-sm">{pool.apr ?? "—"}</div>
-              <div className="col-span-2 text-right text-sm">{pool.fee ?? "—"}</div>
-              <div className="col-span-2 text-right text-sm">{pool.volume ?? "—"}</div>
+              <div className="col-span-2 text-right text-sm">{pool.price}</div>
+              <div className="col-span-2 text-right text-sm">{pool.apr}</div>
+              <div className="col-span-2 text-right text-sm">{pool.fee}</div>
+              <div className="col-span-2 text-right text-sm">{pool.volume}</div>
               <div className="col-span-1 flex justify-end">
                 <button 
-                  className="bg-primary hover:bg-primary/90 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                  className="bg-primary hover:bg-primary/90 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => { setSelectedPool(pool); setShowAddForm(true); }}
                   disabled={!connected}
                 >
