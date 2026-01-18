@@ -205,7 +205,6 @@ public fun update_k<A, B>(pool: &mut LiquidityPool<A, B>) {
     pool.k_last = reserve_a * reserve_b;
 }
 
-
 public fun coin_a_type<A, B>(): TypeName {
     type_name::with_defining_ids<A>()
 }

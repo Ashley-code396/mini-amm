@@ -36,34 +36,25 @@ async function getCoinMetadata(coinType: string) {
 }
 
 // Fallback: extract symbol from coin type string
+// Fallback: extract symbol from coin type string
 function getTokenSymbolFromType(type: string): string {
   if (!type) return "UNKNOWN";
-  const lower = type.toLowerCase();
-  
+
   // Check for SUI native coin first
-  if (type === "0x2::sui::SUI" || lower === "0x2::sui::sui") return "SUI";
-  
-  // Common token mappings
-  if (lower.includes("usdc")) return "USDC";
-  if (lower.includes("usdt")) return "USDT";
-  if (lower.includes("weth")) return "WETH";
-  if (lower.includes("wbtc")) return "WBTC";
-  if (lower.includes("wal")) return "WAL";
-  if (lower.includes("sol")) return "SOL";
-  if (lower.includes("cetus")) return "CETUS";
-  if (lower.includes("turbos")) return "TURBOS";
-  
-  // Extract module name from pattern like 0xADDRESS::module::Type
+  if (type === "0x2::sui::SUI" || type.toLowerCase() === "0x2::sui::sui") return "SUI";
+
+  // Extract module/type name from pattern like 0xADDRESS::module::Token
   const moduleMatch = type.match(/::\w+::(\w+)/);
   if (moduleMatch && moduleMatch[1]) {
     return moduleMatch[1].toUpperCase();
   }
-  
-  // Last resort: extract last segment
+
+  // Last resort: take last segment of type string
   const parts = type.split(/::|</);
   const last = parts[parts.length - 1] ?? type;
   return last.replace(/>.*/g, "").toUpperCase().slice(0, 10);
 }
+
 
 // GET /api/pools - fetch all pools from DB with enhanced data
 router.get('/', async (req: Request, res: Response) => {

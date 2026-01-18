@@ -12,7 +12,14 @@ const POOL_EVENT_TYPES = [
   "LiquidityRemoved",
 ] as const;
 
-// Helper function to get token types from pool object on-chain
+// Helper function to unwrap Coin<> wrapper if present
+function unwrapCoinType(type: string): string {
+  const match = type.match(/^0x[0-9a-f]+::coin::Coin<(.+)>$/i);
+  if (match && match[1]) return match[1].trim();
+  return type;
+}
+
+// --- Fetch token types from pool object on-chain ---
 async function getTokenTypesFromPoolObject(poolId: string): Promise<{ token1: string; token2: string } | null> {
   try {
     const poolObject = await client.getObject({
@@ -29,7 +36,7 @@ async function getTokenTypesFromPoolObject(poolId: string): Promise<{ token1: st
     const typeMatch = poolObject.data.type.match(/<(.+)>/);
     
     if (typeMatch) {
-      const typeParams = typeMatch[1].split(',').map(t => t.trim());
+      const typeParams = typeMatch[1].split(',').map(t => unwrapCoinType(t.trim()));
       if (typeParams.length >= 2) {
         console.log(`  ✓ Found token types for ${poolId}:`);
         console.log(`    Token A: ${typeParams[0]}`);
@@ -48,6 +55,7 @@ async function getTokenTypesFromPoolObject(poolId: string): Promise<{ token1: st
     return null;
   }
 }
+
 
 // Helper function to extract token types from event type string (fallback)
 function extractTokenTypesFromEventType(eventType: string): { token1: string; token2: string } | null {
@@ -124,6 +132,7 @@ export const saveEventsToDB = async (events: SuiEvent[]) => {
   }
 };
 
+
 // --- Process unprocessed events into pools ---
 export const getPoolsFromEvents = async () => {
   const events = await prisma.poolEvent.findMany({ where: { processed: false } });
@@ -141,13 +150,13 @@ export const getPoolsFromEvents = async () => {
       continue;
     }
 
-    // Try to extract token types from event type string first (fast)
-    let tokenTypes = extractTokenTypesFromEventType(ev.type);
-    
-    // If not found, fetch from pool object on-chain (slower but reliable)
+    // --- Fetch token types from pool object on-chain first ---
+    let tokenTypes = await getTokenTypesFromPoolObject(poolId);
+
+    // --- Fallback: extract token types from event type ---
     if (!tokenTypes) {
-      console.log(`Fetching token types from chain for pool: ${poolId}`);
-      tokenTypes = await getTokenTypesFromPoolObject(poolId);
+      console.log(`⚠ Could not get token types from chain, falling back to event type for pool: ${poolId}`);
+      tokenTypes = extractTokenTypesFromEventType(ev.type);
     }
 
     poolsWithTokenTypes.push({
