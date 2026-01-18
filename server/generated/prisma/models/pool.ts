@@ -9,8 +9,8 @@
  * 🟢 You can import this file directly.
  */
 import type * as runtime from "@prisma/client/runtime/client"
-import type * as $Enums from "../enums"
-import type * as Prisma from "../internal/prismaNamespace"
+import type * as $Enums from "../enums.ts"
+import type * as Prisma from "../internal/prismaNamespace.ts"
 
 /**
  * Model pool
@@ -41,6 +41,8 @@ export type PoolSumAggregateOutputType = {
 export type PoolMinAggregateOutputType = {
   id: number | null
   poolId: string | null
+  token1: string | null
+  token2: string | null
   reserveA: bigint | null
   reserveB: bigint | null
   createdAt: Date | null
@@ -50,6 +52,8 @@ export type PoolMinAggregateOutputType = {
 export type PoolMaxAggregateOutputType = {
   id: number | null
   poolId: string | null
+  token1: string | null
+  token2: string | null
   reserveA: bigint | null
   reserveB: bigint | null
   createdAt: Date | null
@@ -59,6 +63,8 @@ export type PoolMaxAggregateOutputType = {
 export type PoolCountAggregateOutputType = {
   id: number
   poolId: number
+  token1: number
+  token2: number
   reserveA: number
   reserveB: number
   createdAt: number
@@ -82,6 +88,8 @@ export type PoolSumAggregateInputType = {
 export type PoolMinAggregateInputType = {
   id?: true
   poolId?: true
+  token1?: true
+  token2?: true
   reserveA?: true
   reserveB?: true
   createdAt?: true
@@ -91,6 +99,8 @@ export type PoolMinAggregateInputType = {
 export type PoolMaxAggregateInputType = {
   id?: true
   poolId?: true
+  token1?: true
+  token2?: true
   reserveA?: true
   reserveB?: true
   createdAt?: true
@@ -100,6 +110,8 @@ export type PoolMaxAggregateInputType = {
 export type PoolCountAggregateInputType = {
   id?: true
   poolId?: true
+  token1?: true
+  token2?: true
   reserveA?: true
   reserveB?: true
   createdAt?: true
@@ -196,6 +208,8 @@ export type poolGroupByArgs<ExtArgs extends runtime.Types.Extensions.InternalArg
 export type PoolGroupByOutputType = {
   id: number
   poolId: string
+  token1: string
+  token2: string
   reserveA: bigint
   reserveB: bigint
   createdAt: Date
@@ -228,6 +242,8 @@ export type poolWhereInput = {
   NOT?: Prisma.poolWhereInput | Prisma.poolWhereInput[]
   id?: Prisma.IntFilter<"pool"> | number
   poolId?: Prisma.StringFilter<"pool"> | string
+  token1?: Prisma.StringFilter<"pool"> | string
+  token2?: Prisma.StringFilter<"pool"> | string
   reserveA?: Prisma.BigIntFilter<"pool"> | bigint | number
   reserveB?: Prisma.BigIntFilter<"pool"> | bigint | number
   createdAt?: Prisma.DateTimeFilter<"pool"> | Date | string
@@ -237,6 +253,8 @@ export type poolWhereInput = {
 export type poolOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   poolId?: Prisma.SortOrder
+  token1?: Prisma.SortOrder
+  token2?: Prisma.SortOrder
   reserveA?: Prisma.SortOrder
   reserveB?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -249,6 +267,8 @@ export type poolWhereUniqueInput = Prisma.AtLeast<{
   AND?: Prisma.poolWhereInput | Prisma.poolWhereInput[]
   OR?: Prisma.poolWhereInput[]
   NOT?: Prisma.poolWhereInput | Prisma.poolWhereInput[]
+  token1?: Prisma.StringFilter<"pool"> | string
+  token2?: Prisma.StringFilter<"pool"> | string
   reserveA?: Prisma.BigIntFilter<"pool"> | bigint | number
   reserveB?: Prisma.BigIntFilter<"pool"> | bigint | number
   createdAt?: Prisma.DateTimeFilter<"pool"> | Date | string
@@ -258,6 +278,8 @@ export type poolWhereUniqueInput = Prisma.AtLeast<{
 export type poolOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   poolId?: Prisma.SortOrder
+  token1?: Prisma.SortOrder
+  token2?: Prisma.SortOrder
   reserveA?: Prisma.SortOrder
   reserveB?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -275,6 +297,8 @@ export type poolScalarWhereWithAggregatesInput = {
   NOT?: Prisma.poolScalarWhereWithAggregatesInput | Prisma.poolScalarWhereWithAggregatesInput[]
   id?: Prisma.IntWithAggregatesFilter<"pool"> | number
   poolId?: Prisma.StringWithAggregatesFilter<"pool"> | string
+  token1?: Prisma.StringWithAggregatesFilter<"pool"> | string
+  token2?: Prisma.StringWithAggregatesFilter<"pool"> | string
   reserveA?: Prisma.BigIntWithAggregatesFilter<"pool"> | bigint | number
   reserveB?: Prisma.BigIntWithAggregatesFilter<"pool"> | bigint | number
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"pool"> | Date | string
@@ -283,6 +307,8 @@ export type poolScalarWhereWithAggregatesInput = {
 
 export type poolCreateInput = {
   poolId: string
+  token1: string
+  token2: string
   reserveA: bigint | number
   reserveB: bigint | number
   createdAt?: Date | string
@@ -292,6 +318,8 @@ export type poolCreateInput = {
 export type poolUncheckedCreateInput = {
   id?: number
   poolId: string
+  token1: string
+  token2: string
   reserveA: bigint | number
   reserveB: bigint | number
   createdAt?: Date | string
@@ -300,6 +328,8 @@ export type poolUncheckedCreateInput = {
 
 export type poolUpdateInput = {
   poolId?: Prisma.StringFieldUpdateOperationsInput | string
+  token1?: Prisma.StringFieldUpdateOperationsInput | string
+  token2?: Prisma.StringFieldUpdateOperationsInput | string
   reserveA?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   reserveB?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -309,6 +339,8 @@ export type poolUpdateInput = {
 export type poolUncheckedUpdateInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   poolId?: Prisma.StringFieldUpdateOperationsInput | string
+  token1?: Prisma.StringFieldUpdateOperationsInput | string
+  token2?: Prisma.StringFieldUpdateOperationsInput | string
   reserveA?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   reserveB?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -318,6 +350,8 @@ export type poolUncheckedUpdateInput = {
 export type poolCreateManyInput = {
   id?: number
   poolId: string
+  token1: string
+  token2: string
   reserveA: bigint | number
   reserveB: bigint | number
   createdAt?: Date | string
@@ -326,6 +360,8 @@ export type poolCreateManyInput = {
 
 export type poolUpdateManyMutationInput = {
   poolId?: Prisma.StringFieldUpdateOperationsInput | string
+  token1?: Prisma.StringFieldUpdateOperationsInput | string
+  token2?: Prisma.StringFieldUpdateOperationsInput | string
   reserveA?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   reserveB?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -335,6 +371,8 @@ export type poolUpdateManyMutationInput = {
 export type poolUncheckedUpdateManyInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   poolId?: Prisma.StringFieldUpdateOperationsInput | string
+  token1?: Prisma.StringFieldUpdateOperationsInput | string
+  token2?: Prisma.StringFieldUpdateOperationsInput | string
   reserveA?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   reserveB?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -344,6 +382,8 @@ export type poolUncheckedUpdateManyInput = {
 export type poolCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   poolId?: Prisma.SortOrder
+  token1?: Prisma.SortOrder
+  token2?: Prisma.SortOrder
   reserveA?: Prisma.SortOrder
   reserveB?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -359,6 +399,8 @@ export type poolAvgOrderByAggregateInput = {
 export type poolMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   poolId?: Prisma.SortOrder
+  token1?: Prisma.SortOrder
+  token2?: Prisma.SortOrder
   reserveA?: Prisma.SortOrder
   reserveB?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -368,6 +410,8 @@ export type poolMaxOrderByAggregateInput = {
 export type poolMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   poolId?: Prisma.SortOrder
+  token1?: Prisma.SortOrder
+  token2?: Prisma.SortOrder
   reserveA?: Prisma.SortOrder
   reserveB?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -385,6 +429,8 @@ export type poolSumOrderByAggregateInput = {
 export type poolSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   poolId?: boolean
+  token1?: boolean
+  token2?: boolean
   reserveA?: boolean
   reserveB?: boolean
   createdAt?: boolean
@@ -394,6 +440,8 @@ export type poolSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
 export type poolSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   poolId?: boolean
+  token1?: boolean
+  token2?: boolean
   reserveA?: boolean
   reserveB?: boolean
   createdAt?: boolean
@@ -403,6 +451,8 @@ export type poolSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
 export type poolSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   poolId?: boolean
+  token1?: boolean
+  token2?: boolean
   reserveA?: boolean
   reserveB?: boolean
   createdAt?: boolean
@@ -412,13 +462,15 @@ export type poolSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
 export type poolSelectScalar = {
   id?: boolean
   poolId?: boolean
+  token1?: boolean
+  token2?: boolean
   reserveA?: boolean
   reserveB?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type poolOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "poolId" | "reserveA" | "reserveB" | "createdAt" | "updatedAt", ExtArgs["result"]["pool"]>
+export type poolOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "poolId" | "token1" | "token2" | "reserveA" | "reserveB" | "createdAt" | "updatedAt", ExtArgs["result"]["pool"]>
 
 export type $poolPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "pool"
@@ -426,6 +478,8 @@ export type $poolPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: number
     poolId: string
+    token1: string
+    token2: string
     reserveA: bigint
     reserveB: bigint
     createdAt: Date
@@ -855,6 +909,8 @@ export interface Prisma__poolClient<T, Null = never, ExtArgs extends runtime.Typ
 export interface poolFieldRefs {
   readonly id: Prisma.FieldRef<"pool", 'Int'>
   readonly poolId: Prisma.FieldRef<"pool", 'String'>
+  readonly token1: Prisma.FieldRef<"pool", 'String'>
+  readonly token2: Prisma.FieldRef<"pool", 'String'>
   readonly reserveA: Prisma.FieldRef<"pool", 'BigInt'>
   readonly reserveB: Prisma.FieldRef<"pool", 'BigInt'>
   readonly createdAt: Prisma.FieldRef<"pool", 'DateTime'>

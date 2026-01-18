@@ -3,6 +3,7 @@ module mini_amm::pool;
 use sui::balance::{Self, Balance, Supply};
 use sui::coin::{Self, Coin};
 use sui::event;
+use std::type_name::{Self, TypeName};
 
 /// Phantom type for LP token
 public struct LP<phantom A, phantom B> has drop {}
@@ -202,4 +203,17 @@ public fun update_k<A, B>(pool: &mut LiquidityPool<A, B>) {
     let reserve_a = balance::value(&pool.reserve_a);
     let reserve_b = balance::value(&pool.reserve_b);
     pool.k_last = reserve_a * reserve_b;
+}
+
+
+public fun coin_a_type<A, B>(): TypeName {
+    type_name::with_defining_ids<A>()
+}
+
+public fun coin_b_type<A, B>(): TypeName {
+    type_name::with_defining_ids<B>()
+}
+
+public fun lp_type<A, B>(): TypeName {
+    type_name::with_defining_ids<LP<A, B>>()
 }

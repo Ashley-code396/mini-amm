@@ -8,7 +8,7 @@
  *
  * 🟢 You can import this file directly.
  */
-export type * from './models/poolEvent'
-export type * from './models/pool'
-export type * from './models/eventCursor'
-export type * from './commonInputTypes'
+export type * from './models/poolEvent.ts'
+export type * from './models/pool.ts'
+export type * from './models/eventCursor.ts'
+export type * from './commonInputTypes.ts'

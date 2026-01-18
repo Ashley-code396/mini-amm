@@ -16,10 +16,10 @@
  */
 
 import * as runtime from "@prisma/client/runtime/client"
-import type * as Prisma from "../models"
-import { type PrismaClient } from "./class"
+import type * as Prisma from "../models.ts"
+import { type PrismaClient } from "./class.ts"
 
-export type * from '../models'
+export type * from '../models.ts'
 
 export type DMMF = typeof runtime.DMMF
 
@@ -685,6 +685,8 @@ export type PoolEventScalarFieldEnum = (typeof PoolEventScalarFieldEnum)[keyof t
 export const PoolScalarFieldEnum = {
   id: 'id',
   poolId: 'poolId',
+  token1: 'token1',
+  token2: 'token2',
   reserveA: 'reserveA',
   reserveB: 'reserveB',
   createdAt: 'createdAt',

@@ -16,6 +16,8 @@ type PoolSummary = {
   id: string;
   token1: string;
   token2: string;
+  token1Symbol?: string;
+  token2Symbol?: string;
   price?: string;
   apr?: string;
   fee?: string;
@@ -41,33 +43,32 @@ export default function PoolInterface() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedPool, setSelectedPool] = useState<PoolSummary | null>(null);
   
-  // Token balances grouped by symbol
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
   
-  // Create Pool Form State
   const [selectedToken1, setSelectedToken1] = useState("");
   const [selectedToken2, setSelectedToken2] = useState("");
   const [amount1, setAmount1] = useState("");
   const [amount2, setAmount2] = useState("");
   
-  // Add Liquidity Form State
   const [addAmount1, setAddAmount1] = useState("");
   const [addAmount2, setAddAmount2] = useState("");
 
-  // Helper: derive short token symbol from coin type string
   function getTokenSymbol(type: string): string {
     if (!type) return "";
     const lower = type.toLowerCase();
-    if (lower.includes("sui")) return "SUI";
+    if (lower.includes("sui") && !lower.includes("usdc") && !lower.includes("usdt")) return "SUI";
     if (lower.includes("usdc")) return "USDC";
     if (lower.includes("usdt")) return "USDT";
+    if (lower.includes("weth")) return "WETH";
+    if (lower.includes("wbtc")) return "WBTC";
     if (lower.includes("wal")) return "WAL";
+    if (lower.includes("sol")) return "SOL";
+    if (lower.includes("cetus")) return "CETUS";
     const parts = type.split(/::|</);
     const last = parts[parts.length - 1] ?? type;
     return last.replace(/>.*/g, "").toUpperCase();
   }
 
-  // Format balance display
   function formatBalance(n: number): string {
     if (!isFinite(n)) return "0";
     if (Number.isInteger(n)) return String(n);
@@ -77,7 +78,6 @@ export default function PoolInterface() {
     });
   }
 
-  // Fetch user's coins and group by token type
   useEffect(() => {
     async function fetchUserCoins() {
       if (!account?.address) {
@@ -90,7 +90,6 @@ export default function PoolInterface() {
           owner: account.address,
         });
 
-        // Group coins by token type
         const grouped = new Map<string, TokenBalance>();
 
         allCoins.data.forEach(coin => {
@@ -128,51 +127,50 @@ export default function PoolInterface() {
     return () => clearInterval(interval);
   }, [account?.address, client]);
 
-  // Fetch pools from the Container's Bag
   useEffect(() => {
-  async function fetchPools() {
-    setLoading(true);
-    try {
-      if (!BACKEND_URL) {
-        console.warn("Backend URL not configured");
+    async function fetchPools() {
+      setLoading(true);
+      try {
+        if (!BACKEND_URL) {
+          console.warn("Backend URL not configured");
+          setPools([]);
+          return;
+        }
+
+        const res = await fetch(`${BACKEND_URL}/api/pools`);
+        const json = await res.json();
+
+        if (!json.success || !Array.isArray(json.data)) {
+          setPools([]);
+          return;
+        }
+
+        const mappedPools: PoolSummary[] = json.data.map((pool: any) => ({
+          id: pool.id,
+          token1: pool.token1,
+          token2: pool.token2,
+          token1Symbol: pool.token1Symbol || getTokenSymbol(pool.token1),
+          token2Symbol: pool.token2Symbol || getTokenSymbol(pool.token2),
+          price: pool.price ?? "—",
+          apr: pool.apr ?? "—",
+          fee: pool.fee ?? "—",
+          volume: pool.volume ?? "—",
+        }));
+
+        setPools(mappedPools);
+      } catch (err) {
+        console.error("Failed to fetch pools from backend:", err);
         setPools([]);
-        return;
+      } finally {
+        setLoading(false);
       }
-
-      const res = await fetch(`${BACKEND_URL}/api/pools`);
-      const json = await res.json();
-
-      if (!json.success || !Array.isArray(json.data)) {
-        setPools([]);
-        return;
-      }
-
-      // Map the DB pools to PoolSummary type
-      const mappedPools: PoolSummary[] = json.data.map((pool: any) => ({
-        id: pool.id,
-        token1: pool.token1,
-        token2: pool.token2,
-        price: pool.price ?? "—",
-        apr: pool.apr ?? "—",
-        fee: pool.fee ?? "—",
-        volume: pool.volume ?? "—",
-      }));
-
-      setPools(mappedPools);
-    } catch (err) {
-      console.error("Failed to fetch pools from backend:", err);
-      setPools([]);
-    } finally {
-      setLoading(false);
     }
-  }
 
-  fetchPools();
-  const interval = setInterval(fetchPools, 15000); // optional polling
-  return () => clearInterval(interval);
-}, []);
+    fetchPools();
+    const interval = setInterval(fetchPools, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
-  // Get coins to use for transaction (merges multiple coin objects if needed)
   function selectCoinsForAmount(tokenSymbol: string, amount: number): string[] {
     const token = tokenBalances.find(t => t.symbol === tokenSymbol);
     if (!token) return [];
@@ -180,7 +178,6 @@ export default function PoolInterface() {
     let remaining = amount;
     const selectedCoins: string[] = [];
     
-    // Sort by balance descending to minimize coin objects used
     const sortedCoins = [...token.coinObjects].sort((a, b) => b.balance - a.balance);
     
     for (const coin of sortedCoins) {
@@ -192,11 +189,9 @@ export default function PoolInterface() {
     return selectedCoins;
   }
 
-  // Create Pool Handler
   async function handleCreatePool() {
     if (!account?.address) return alert("Connect wallet first");
     
-    // Validate configuration
     if (!TESTNET_PACKAGE_ID || String(TESTNET_PACKAGE_ID) === "0xYOUR_PACKAGE_ID") {
       return alert("Package ID not configured. Please update TESTNET_PACKAGE_ID in the code.");
     }
@@ -223,7 +218,6 @@ export default function PoolInterface() {
     try {
       const tx = new Transaction();
 
-      // Select and merge coins for token 1
       const coins1 = selectCoinsForAmount(selectedToken1, amt1);
       const coins2 = selectCoinsForAmount(selectedToken2, amt2);
 
@@ -231,7 +225,6 @@ export default function PoolInterface() {
         return alert("Unable to select coins for transaction");
       }
 
-      // Merge coins if multiple objects, then split exact amount
       let coin1Arg = tx.object(coins1[0]);
       if (coins1.length > 1) {
         tx.mergeCoins(coin1Arg, coins1.slice(1).map(id => tx.object(id)));
@@ -273,7 +266,6 @@ export default function PoolInterface() {
     }
   }
 
-  // Add Liquidity Handler
   async function handleAddLiquidity() {
     if (!account?.address || !selectedPool) return alert("Connect wallet and select a pool");
     
@@ -284,8 +276,8 @@ export default function PoolInterface() {
       return alert("Enter valid amounts for both tokens");
     }
 
-    const token1Symbol = getTokenSymbol(selectedPool.token1);
-    const token2Symbol = getTokenSymbol(selectedPool.token2);
+    const token1Symbol = selectedPool.token1Symbol || getTokenSymbol(selectedPool.token1);
+    const token2Symbol = selectedPool.token2Symbol || getTokenSymbol(selectedPool.token2);
     
     const token1Data = tokenBalances.find(t => t.symbol === token1Symbol);
     const token2Data = tokenBalances.find(t => t.symbol === token2Symbol);
@@ -339,9 +331,11 @@ export default function PoolInterface() {
     }
   }
 
-  const filteredPools = pools.filter((pool) =>
-    `${pool.token1}/${pool.token2}`.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredPools = pools.filter((pool) => {
+    const token1 = pool.token1Symbol || getTokenSymbol(pool.token1);
+    const token2 = pool.token2Symbol || getTokenSymbol(pool.token2);
+    return `${token1}/${token2}`.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   const connected = !!account?.address;
   const isConfigured =
@@ -350,7 +344,6 @@ export default function PoolInterface() {
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-6">
-      {/* Configuration Warning */}
       {!isConfigured && (
         <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
           <div className="font-bold text-yellow-600 mb-2">⚠️ Configuration Required</div>
@@ -364,7 +357,6 @@ export default function PoolInterface() {
         </div>
       )}
 
-      {/* Header */}
       <div className="mb-6 flex justify-between items-center">
         <h1 className="text-2xl font-bold">Liquidity Pools</h1>
         <button
@@ -376,7 +368,6 @@ export default function PoolInterface() {
         </button>
       </div>
 
-      {/* Wallet Status */}
       {connected && tokenBalances.length > 0 && (
         <div className="mb-4 p-4 bg-muted/30 rounded-lg">
           <div className="text-sm font-medium mb-2">Your Tokens:</div>
@@ -390,14 +381,12 @@ export default function PoolInterface() {
         </div>
       )}
 
-      {/* Connection Prompt */}
       {!connected && (
         <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-center">
           <div className="text-blue-700">Connect your wallet to view and manage liquidity pools</div>
         </div>
       )}
 
-      {/* Search Bar */}
       <input
         type="text"
         placeholder="Search pools..."
@@ -406,14 +395,13 @@ export default function PoolInterface() {
         onChange={(e) => setSearchQuery(e.target.value)}
       />
 
-      {/* Pools Table */}
       <div className="bg-card rounded-xl overflow-hidden border">
         <div className="grid grid-cols-12 gap-4 p-4 text-sm font-medium border-b bg-muted/30">
           <div className="col-span-3">Pool</div>
           <div className="col-span-2 text-right">Price</div>
           <div className="col-span-2 text-right">APR</div>
-          <div className="col-span-2 text-right">Fee</div>
-          <div className="col-span-2 text-right">Volume</div>
+          <div className="col-span-2 text-right">Trading Fee</div>
+          <div className="col-span-2 text-right">Total Trading Volume</div>
           <div className="col-span-1"></div>
         </div>
 
@@ -426,41 +414,46 @@ export default function PoolInterface() {
           </div>
         )}
 
-        {filteredPools.map((pool) => (
-          <div key={pool.id} className="p-4 hover:bg-muted/30 transition-colors border-b last:border-0">
-            <div className="grid grid-cols-12 items-center gap-4">
-              <div className="col-span-3 flex items-center space-x-3">
-                <div className="flex -space-x-2">
-                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-                    {getTokenSymbol(pool.token1)[0]}
+        {filteredPools.map((pool) => {
+          const token1 = pool.token1Symbol || getTokenSymbol(pool.token1);
+          const token2 = pool.token2Symbol || getTokenSymbol(pool.token2);
+          
+          return (
+            <div key={pool.id} className="p-4 hover:bg-muted/30 transition-colors border-b last:border-0">
+              <div className="grid grid-cols-12 items-center gap-4">
+                <div className="col-span-3 flex items-center space-x-3">
+                  <div className="flex -space-x-2">
+                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
+                      {token1[0]}
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-bold text-sm">
+                      {token2[0]}
+                    </div>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-bold text-sm">
-                    {getTokenSymbol(pool.token2)[0]}
+                  <div className="font-medium">
+                    {token1}/{token2}
                   </div>
                 </div>
-                <div className="font-medium">
-                  {getTokenSymbol(pool.token1)}/{getTokenSymbol(pool.token2)}
+                <div className="col-span-2 text-right text-sm">{pool.price}</div>
+                <div className="col-span-2 text-right text-sm">{pool.apr}</div>
+                <div className="col-span-2 text-right text-sm">{pool.fee}</div>
+                <div className="col-span-2 text-right text-sm">{pool.volume}</div>
+                <div className="col-span-1 flex justify-end">
+                  <button 
+                    className="bg-primary hover:bg-primary/90 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => { setSelectedPool(pool); setShowAddForm(true); }}
+                    disabled={!connected}
+                  >
+                    ADD
+                  </button>
                 </div>
-              </div>
-              <div className="col-span-2 text-right text-sm">{pool.price}</div>
-              <div className="col-span-2 text-right text-sm">{pool.apr}</div>
-              <div className="col-span-2 text-right text-sm">{pool.fee}</div>
-              <div className="col-span-2 text-right text-sm">{pool.volume}</div>
-              <div className="col-span-1 flex justify-end">
-                <button 
-                  className="bg-primary hover:bg-primary/90 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => { setSelectedPool(pool); setShowAddForm(true); }}
-                  disabled={!connected}
-                >
-                  Add
-                </button>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Create Pool Modal */}
+      {/* Modals remain the same */}
       {showCreateForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-card rounded-2xl p-6 w-full max-w-md shadow-2xl">
@@ -474,7 +467,6 @@ export default function PoolInterface() {
               </button>
             </div>
 
-            {/* Token 1 Selection */}
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2">Token 1</label>
               <select
@@ -491,7 +483,6 @@ export default function PoolInterface() {
               </select>
             </div>
 
-            {/* Amount 1 */}
             {selectedToken1 && (
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-2">Amount</label>
@@ -520,7 +511,6 @@ export default function PoolInterface() {
               </div>
             )}
 
-            {/* Token 2 Selection */}
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2">Token 2</label>
               <select
@@ -539,7 +529,6 @@ export default function PoolInterface() {
               </select>
             </div>
 
-            {/* Amount 2 */}
             {selectedToken2 && (
               <div className="mb-6">
                 <label className="block text-sm font-medium mb-2">Amount</label>
@@ -568,7 +557,6 @@ export default function PoolInterface() {
               </div>
             )}
 
-            {/* Action Buttons */}
             <div className="flex gap-3">
               <button 
                 className="flex-1 px-4 py-3 border rounded-lg hover:bg-muted transition-colors font-medium"
@@ -588,7 +576,6 @@ export default function PoolInterface() {
         </div>
       )}
 
-      {/* Add Liquidity Modal */}
       {showAddForm && selectedPool && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-card rounded-2xl p-6 w-full max-w-md shadow-2xl">
@@ -604,14 +591,14 @@ export default function PoolInterface() {
 
             <div className="mb-4 p-4 bg-muted/30 rounded-lg">
               <div className="font-medium">
-                {getTokenSymbol(selectedPool.token1)}/{getTokenSymbol(selectedPool.token2)}
+                {selectedPool.token1Symbol || getTokenSymbol(selectedPool.token1)}/
+                {selectedPool.token2Symbol || getTokenSymbol(selectedPool.token2)}
               </div>
             </div>
 
-            {/* Token 1 Amount */}
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2">
-                {getTokenSymbol(selectedPool.token1)} Amount
+                {selectedPool.token1Symbol || getTokenSymbol(selectedPool.token1)} Amount
               </label>
               <div className="flex gap-2">
                 <input
@@ -624,7 +611,8 @@ export default function PoolInterface() {
                 />
                 <button
                   onClick={() => {
-                    const token = tokenBalances.find(t => t.symbol === getTokenSymbol(selectedPool.token1));
+                    const symbol = selectedPool.token1Symbol || getTokenSymbol(selectedPool.token1);
+                    const token = tokenBalances.find(t => t.symbol === symbol);
                     if (token) setAddAmount1(String(token.totalBalance));
                   }}
                   className="px-4 py-2 border rounded-lg hover:bg-muted transition-colors font-medium"
@@ -633,14 +621,13 @@ export default function PoolInterface() {
                 </button>
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                Available: {formatBalance(tokenBalances.find(t => t.symbol === getTokenSymbol(selectedPool.token1))?.totalBalance ?? 0)}
+                Available: {formatBalance(tokenBalances.find(t => t.symbol === (selectedPool.token1Symbol || getTokenSymbol(selectedPool.token1)))?.totalBalance ?? 0)}
               </div>
             </div>
 
-            {/* Token 2 Amount */}
             <div className="mb-6">
               <label className="block text-sm font-medium mb-2">
-                {getTokenSymbol(selectedPool.token2)} Amount
+                {selectedPool.token2Symbol || getTokenSymbol(selectedPool.token2)} Amount
               </label>
               <div className="flex gap-2">
                 <input
@@ -653,7 +640,8 @@ export default function PoolInterface() {
                 />
                 <button
                   onClick={() => {
-                    const token = tokenBalances.find(t => t.symbol === getTokenSymbol(selectedPool.token2));
+                    const symbol = selectedPool.token2Symbol || getTokenSymbol(selectedPool.token2);
+                    const token = tokenBalances.find(t => t.symbol === symbol);
                     if (token) setAddAmount2(String(token.totalBalance));
                   }}
                   className="px-4 py-2 border rounded-lg hover:bg-muted transition-colors font-medium"
@@ -662,11 +650,10 @@ export default function PoolInterface() {
                 </button>
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                Available: {formatBalance(tokenBalances.find(t => t.symbol === getTokenSymbol(selectedPool.token2))?.totalBalance ?? 0)}
+                Available: {formatBalance(tokenBalances.find(t => t.symbol === (selectedPool.token2Symbol || getTokenSymbol(selectedPool.token2)))?.totalBalance ?? 0)}
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex gap-3">
               <button 
                 className="flex-1 px-4 py-3 border rounded-lg hover:bg-muted transition-colors font-medium"

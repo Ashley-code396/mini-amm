@@ -17,8 +17,8 @@
 
 import * as runtime from "@prisma/client/runtime/index-browser"
 
-export type * from '../models'
-export type * from './prismaNamespace'
+export type * from '../models.ts'
+export type * from './prismaNamespace.ts'
 
 export const Decimal = runtime.Decimal
 
@@ -90,6 +90,8 @@ export type PoolEventScalarFieldEnum = (typeof PoolEventScalarFieldEnum)[keyof t
 export const PoolScalarFieldEnum = {
   id: 'id',
   poolId: 'poolId',
+  token1: 'token1',
+  token2: 'token2',
   reserveA: 'reserveA',
   reserveB: 'reserveB',
   createdAt: 'createdAt',

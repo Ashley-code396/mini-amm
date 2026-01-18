@@ -6,7 +6,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  
+
 }
 
 /// Tracks Sui events emitted by mini_amm::pool
@@ -25,10 +25,11 @@ model poolEvent {
 /// Stores pool state derived from events
 model pool {
   id        Int      @id @default(autoincrement())
-  poolId    String   @unique               // Pool object ID on-chain
-  reserveA  BigInt                              // Reserve of token A
-  reserveB  BigInt                              // Reserve of token B
-
+  poolId    String   @unique
+  token1    String?                         // Add this
+  token2    String?                        // Add this
+  reserveA  BigInt
+  reserveB  BigInt
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
