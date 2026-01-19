@@ -5,9 +5,25 @@ import { client } from '../services/suiClient';
 const router = Router();
 
 // Cache for coin metadata to avoid repeated API calls
-const metadataCache = new Map<string, { symbol: string; name: string; decimals: number } | null>();
+const metadataCache = new Map<string, { 
+  symbol: string; 
+  name: string; 
+  decimals: number;
+  iconUrl: string | null;
+} | null>();
 
-// Fetch coin metadata with caching
+// Known token icons (fallback mapping)
+const KNOWN_TOKEN_ICONS: Record<string, string> = {
+  'SUI': 'https://coin-images.coingecko.com/coins/images/26375/small/sui_asset.jpeg',
+  'USDC': 'https://coin-images.coingecko.com/coins/images/6319/small/usdc.png',
+  'USDT': 'https://coin-images.coingecko.com/coins/images/325/small/Tether.png',
+  'WETH': 'https://coin-images.coingecko.com/coins/images/2518/small/weth.png',
+  'WBTC': 'https://coin-images.coingecko.com/coins/images/7598/small/wrapped_bitcoin_wbtc.png',
+  'SOL': 'https://coin-images.coingecko.com/coins/images/4128/small/solana.png',
+  'CETUS': 'https://coin-images.coingecko.com/coins/images/30556/small/cetus.png',
+};
+
+// Fetch coin metadata with caching including icon
 async function getCoinMetadata(coinType: string) {
   if (metadataCache.has(coinType)) {
     return metadataCache.get(coinType);
@@ -20,7 +36,8 @@ async function getCoinMetadata(coinType: string) {
       const result = {
         symbol: metadata.symbol,
         name: metadata.name,
-        decimals: metadata.decimals
+        decimals: metadata.decimals,
+        iconUrl: metadata.iconUrl || null
       };
       metadataCache.set(coinType, result);
       return result;
@@ -35,7 +52,6 @@ async function getCoinMetadata(coinType: string) {
   }
 }
 
-// Fallback: extract symbol from coin type string
 // Fallback: extract symbol from coin type string
 function getTokenSymbolFromType(type: string): string {
   if (!type) return "UNKNOWN";
@@ -55,6 +71,16 @@ function getTokenSymbolFromType(type: string): string {
   return last.replace(/>.*/g, "").toUpperCase().slice(0, 10);
 }
 
+// Generate fallback icon URL
+function getFallbackIconUrl(symbol: string): string {
+  // Check if we have a known icon for this symbol
+  if (KNOWN_TOKEN_ICONS[symbol]) {
+    return KNOWN_TOKEN_ICONS[symbol];
+  }
+  
+  // Generate a unique icon using DiceBear
+  return `https://api.dicebear.com/7.x/identicon/svg?seed=${symbol}&backgroundColor=3b82f6`;
+}
 
 // GET /api/pools - fetch all pools from DB with enhanced data
 router.get('/', async (req: Request, res: Response) => {
@@ -84,37 +110,43 @@ router.get('/', async (req: Request, res: Response) => {
       // Calculate price (tokenB per tokenA)
       const price = reserveA > 0 ? (reserveB / reserveA).toFixed(4) : "—";
       
-      // Get token symbols - first try metadata, then fallback to parsing
+      // Get token symbols and icons
       let token1Symbol = "UNKNOWN";
       let token2Symbol = "UNKNOWN";
+      let token1Icon = "";
+      let token2Icon = "";
       
       if (pool.token1) {
         const meta1 = await getCoinMetadata(pool.token1);
         token1Symbol = meta1?.symbol || getTokenSymbolFromType(pool.token1);
+        token1Icon = meta1?.iconUrl || getFallbackIconUrl(token1Symbol);
       }
       
       if (pool.token2) {
         const meta2 = await getCoinMetadata(pool.token2);
         token2Symbol = meta2?.symbol || getTokenSymbolFromType(pool.token2);
+        token2Icon = meta2?.iconUrl || getFallbackIconUrl(token2Symbol);
       }
       
-      // Calculate total liquidity in USD (you can enhance this with real price feeds)
+      // Calculate total liquidity
       const totalLiquidity = (reserveA + reserveB).toFixed(2);
       
       return {
-        id: pool.poolId, // Use poolId as the id for the frontend
+        id: pool.poolId,
         poolId: pool.poolId,
         token1: pool.token1 || "",
         token2: pool.token2 || "",
         token1Symbol,
         token2Symbol,
+        token1Icon,
+        token2Icon,
         reserveA: pool.reserveA.toString(),
         reserveB: pool.reserveB.toString(),
         totalLiquidity,
         price: price,
-        apr: "—", // Calculate based on fees earned / liquidity
-        fee: "0.30%", // Your pool's fee rate
-        volume: "—", // Track this separately in your DB
+        apr: "—",
+        fee: "0.30%",
+        volume: "—",
         createdAt: pool.createdAt.toISOString(),
       };
     }));
