@@ -519,7 +519,7 @@ export default function PoolInterface() {
                 <div className="col-span-2 text-right text-sm">{pool.volume}</div>
                 <div className="col-span-1 flex justify-end">
                   <button
-                    className="bg-primary hover:bg-primary/90 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="bg-white text-black border border-gray-200 px-3 py-1.5 rounded-lg text-sm font-semibold shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => { setSelectedPool(pool); setShowAddForm(true); }}
                     disabled={!connected}
                   >
@@ -741,7 +741,7 @@ export default function PoolInterface() {
                 Cancel
               </button>
               <button
-                className="flex-1 px-4 py-3 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleAddLiquidity}
                 disabled={!addAmount1 || !addAmount2}
               >
