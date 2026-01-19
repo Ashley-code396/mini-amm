@@ -45,7 +45,69 @@ async function getPoolsBagId(containerId: string): Promise<string | null> {
   return bagIdStr;
 }
 
+// Helper to parse LiquidityPool<A, B> generics with proper bracket matching
+function parsePoolGenerics(poolType: string): { token1: string; token2: string } | null {
+  // Find LiquidityPool< and then match brackets to find the generics
+  const lpIndex = poolType.indexOf("LiquidityPool<");
+  if (lpIndex === -1) {
+    console.log("⚠ No LiquidityPool found in:", poolType);
+    return null;
+  }
 
+  // Extract everything after "LiquidityPool<"
+  const afterLP = poolType.substring(lpIndex + "LiquidityPool<".length);
+  
+  // Now we need to find the comma that separates token1 and token2
+  // We need to count angle brackets to handle nested generics
+  let depth = 0;
+  let commaIndex = -1;
+  
+  for (let i = 0; i < afterLP.length; i++) {
+    const char = afterLP[i];
+    if (char === '<') depth++;
+    else if (char === '>') depth--;
+    else if (char === ',' && depth === 0) {
+      commaIndex = i;
+      break;
+    }
+  }
+  
+  if (commaIndex === -1) {
+    console.log("⚠ Could not find comma separator in:", afterLP);
+    return null;
+  }
+  
+  // Extract token1 and token2
+  const token1Raw = afterLP.substring(0, commaIndex).trim();
+  
+  // For token2, find the closing > at depth 0
+  let endIndex = -1;
+  depth = 0;
+  for (let i = commaIndex + 1; i < afterLP.length; i++) {
+    const char = afterLP[i];
+    if (char === '<') depth++;
+    else if (char === '>') {
+      if (depth === 0) {
+        endIndex = i;
+        break;
+      }
+      depth--;
+    }
+  }
+  
+  if (endIndex === -1) {
+    console.log("⚠ Could not find end of generics");
+    return null;
+  }
+  
+  const token2Raw = afterLP.substring(commaIndex + 1, endIndex).trim();
+  
+  const token1 = unwrapCoinType(token1Raw);
+  const token2 = unwrapCoinType(token2Raw);
+
+  console.log(`✓ Extracted tokens: ${token1} / ${token2}`);
+  return { token1, token2 };
+}
 
 export async function getTokenTypesFromPoolsBag(
   containerId: string,
@@ -65,7 +127,6 @@ export async function getTokenTypesFromPoolsBag(
       limit: 100,
     });
 
-
     console.log("📦 Bag fetch result:");
     console.log("  total fields:", bag.data.length);
     console.log("  hasNextPage:", bag.hasNextPage);
@@ -83,35 +144,27 @@ export async function getTokenTypesFromPoolsBag(
       options: { showType: true },
     });
 
+    console.log("🔹 Fetched pool object:");
+    console.log("  objectId:", poolField.objectId);
+    console.log("  type:", poolObject.data?.type);
 
-
-console.log("🔹 Fetched pool object:");
-console.log("  objectId:", poolField.objectId);
-console.log("  type:", poolObject.data?.type);
-
-// Safely access content.fields only if the returned parsed data is a moveObject
-if (poolObject.data?.content && poolObject.data.content.dataType === "moveObject") {
-  // content is a moveObject and has fields
-  console.log("  content fields:", (poolObject.data.content.fields as any));
-} else {
-  console.log("  content fields: <not available or not a moveObject>");
-}
-
-// Optional: print the full object for debugging (use cautiously)
-console.log("  full object data:", JSON.stringify(poolObject.data, null, 2));
     const type = poolObject.data?.type;
     if (!type) return null;
 
-    // 4️⃣ Extract generics
-    const match = type.match(/<(.+)>/);
-    if (!match) return null;
+    // 4️⃣ Extract pool type from dynamic_field::Field<Key, Value>
+    // The type looks like: 0x2::dynamic_field::Field<0x2::object::ID, PackageId::pool::LiquidityPool<TokenA, TokenB>>
+    // We need to extract the Value type (second generic) and then parse its generics
+    
+    const fieldMatch = type.match(/Field<[^,]+,\s*(.+)>$/);
+    if (!fieldMatch) {
+      console.log("⚠ Not a Field type, trying direct parse");
+      return parsePoolGenerics(type);
+    }
 
-    const [token1, token2] = match[1]
-      .split(",")
-      .map(t => unwrapCoinType(t.trim()));
-
-    console.log(`✓ Pool ${lpId} tokens: ${token1} / ${token2}`);
-    return { token1, token2 };
+    const poolType = fieldMatch[1].trim();
+    console.log("  extracted pool type:", poolType);
+    
+    return parsePoolGenerics(poolType);
   } catch (err) {
     console.error("❌ Token extraction failed:", err);
     return null;

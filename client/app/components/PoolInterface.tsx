@@ -189,147 +189,186 @@ export default function PoolInterface() {
     return selectedCoins;
   }
 
-  async function handleCreatePool() {
-    if (!account?.address) return alert("Connect wallet first");
-    
-    if (!TESTNET_PACKAGE_ID || String(TESTNET_PACKAGE_ID) === "0xYOUR_PACKAGE_ID") {
-      return alert("Package ID not configured. Please update TESTNET_PACKAGE_ID in the code.");
-    }
-    if (!CONTAINER_ID || String(CONTAINER_ID) === "0xYOUR_CONTAINER_ID") {
-      return alert("Container ID not configured. Please update CONTAINER_ID in the code.");
-    }
-    
-    if (!selectedToken1 || !selectedToken2) return alert("Select both tokens");
-    
-    const amt1 = parseFloat(amount1);
-    const amt2 = parseFloat(amount2);
-    
-    if (isNaN(amt1) || amt1 <= 0 || isNaN(amt2) || amt2 <= 0) {
-      return alert("Enter valid amounts for both tokens");
-    }
+ // SIMPLE FIX: The real issue is that when you select SUI coins and try to merge them,
+// it conflicts with the wallet's gas payment mechanism.
 
-    const token1Data = tokenBalances.find(t => t.symbol === selectedToken1);
-    const token2Data = tokenBalances.find(t => t.symbol === selectedToken2);
+// Solution: For SUI, use tx.gas directly. For other tokens, use normal coin selection.
 
-    if (!token1Data || !token2Data) return alert("Token data not found");
-    if (amt1 > token1Data.totalBalance) return alert(`Insufficient ${selectedToken1} balance`);
-    if (amt2 > token2Data.totalBalance) return alert(`Insufficient ${selectedToken2} balance`);
+// Update your handleCreatePool function:
+async function handleCreatePool() {
+  if (!account?.address) return alert("Connect wallet first");
+  
+  if (!TESTNET_PACKAGE_ID || String(TESTNET_PACKAGE_ID) === "0xYOUR_PACKAGE_ID") {
+    return alert("Package ID not configured.");
+  }
+  if (!CONTAINER_ID || String(CONTAINER_ID) === "0xYOUR_CONTAINER_ID") {
+    return alert("Container ID not configured.");
+  }
+  
+  if (!selectedToken1 || !selectedToken2) return alert("Select both tokens");
+  
+  const amt1 = parseFloat(amount1);
+  const amt2 = parseFloat(amount2);
+  
+  if (isNaN(amt1) || amt1 <= 0 || isNaN(amt2) || amt2 <= 0) {
+    return alert("Enter valid amounts for both tokens");
+  }
 
-    try {
-      const tx = new Transaction();
+  const token1Data = tokenBalances.find(t => t.symbol === selectedToken1);
+  const token2Data = tokenBalances.find(t => t.symbol === selectedToken2);
 
+  if (!token1Data || !token2Data) return alert("Token data not found");
+  if (amt1 > token1Data.totalBalance) return alert(`Insufficient ${selectedToken1} balance`);
+  if (amt2 > token2Data.totalBalance) return alert(`Insufficient ${selectedToken2} balance`);
+
+  try {
+    const tx = new Transaction();
+
+    // Check if tokens are SUI
+    const isSUI1 = token1Data.type === "0x2::sui::SUI";
+    const isSUI2 = token2Data.type === "0x2::sui::SUI";
+
+    let splitCoin1;
+    if (isSUI1) {
+      // For SUI: split directly from gas coin
+      [splitCoin1] = tx.splitCoins(tx.gas, [tx.pure.u64(Math.floor(amt1 * 1e9))]);
+    } else {
+      // For other tokens: normal coin selection
       const coins1 = selectCoinsForAmount(selectedToken1, amt1);
+      if (!coins1.length) return alert("Unable to select coins for transaction");
+      
+      let coin1Arg = tx.object(coins1[0]);
+      if (coins1.length > 1) {
+        tx.mergeCoins(coin1Arg, coins1.slice(1).map(id => tx.object(id)));
+      }
+      [splitCoin1] = tx.splitCoins(coin1Arg, [tx.pure.u64(Math.floor(amt1 * 1e9))]);
+    }
+
+    let splitCoin2;
+    if (isSUI2) {
+      // For SUI: split directly from gas coin
+      [splitCoin2] = tx.splitCoins(tx.gas, [tx.pure.u64(Math.floor(amt2 * 1e9))]);
+    } else {
+      // For other tokens: normal coin selection
       const coins2 = selectCoinsForAmount(selectedToken2, amt2);
-
-      if (!coins1.length || !coins2.length) {
-        return alert("Unable to select coins for transaction");
-      }
-
-      let coin1Arg = tx.object(coins1[0]);
-      if (coins1.length > 1) {
-        tx.mergeCoins(coin1Arg, coins1.slice(1).map(id => tx.object(id)));
-      }
-      const [splitCoin1] = tx.splitCoins(coin1Arg, [tx.pure.u64(Math.floor(amt1 * 1e9))]);
-
+      if (!coins2.length) return alert("Unable to select coins for transaction");
+      
       let coin2Arg = tx.object(coins2[0]);
       if (coins2.length > 1) {
         tx.mergeCoins(coin2Arg, coins2.slice(1).map(id => tx.object(id)));
       }
-      const [splitCoin2] = tx.splitCoins(coin2Arg, [tx.pure.u64(Math.floor(amt2 * 1e9))]);
-
-      tx.moveCall({
-        target: `${TESTNET_PACKAGE_ID}::mini_amm::create_pool`,
-        typeArguments: [token1Data.type, token2Data.type],
-        arguments: [tx.object(CONTAINER_ID), splitCoin1, splitCoin2],
-      });
-
-      await signAndExecuteTransaction(
-        { transaction: tx },
-        {
-          onSuccess: () => {
-            alert("Pool created successfully!");
-            setShowCreateForm(false);
-            setSelectedToken1("");
-            setSelectedToken2("");
-            setAmount1("");
-            setAmount2("");
-          },
-          onError: (error) => {
-            console.error(error);
-            alert("Failed to create pool: " + error.message);
-          }
-        }
-      );
-    } catch (e) {
-      console.error(e);
-      alert("Failed to create pool: " + (e as any).message);
+      [splitCoin2] = tx.splitCoins(coin2Arg, [tx.pure.u64(Math.floor(amt2 * 1e9))]);
     }
+
+    tx.moveCall({
+      target: `${TESTNET_PACKAGE_ID}::mini_amm::create_pool`,
+      typeArguments: [token1Data.type, token2Data.type],
+      arguments: [tx.object(CONTAINER_ID), splitCoin1, splitCoin2],
+    });
+
+    await signAndExecuteTransaction(
+      { transaction: tx },
+      {
+        onSuccess: () => {
+          alert("Pool created successfully!");
+          setShowCreateForm(false);
+          setSelectedToken1("");
+          setSelectedToken2("");
+          setAmount1("");
+          setAmount2("");
+        },
+        onError: (error) => {
+          console.error(error);
+          alert("Failed to create pool: " + error.message);
+        }
+      }
+    );
+  } catch (e) {
+    console.error(e);
+    alert("Failed to create pool: " + (e as any).message);
+  }
+}
+
+// Update handleAddLiquidity with the same pattern:
+async function handleAddLiquidity() {
+  if (!account?.address || !selectedPool) return alert("Connect wallet and select a pool");
+  
+  const amt1 = parseFloat(addAmount1);
+  const amt2 = parseFloat(addAmount2);
+  
+  if (isNaN(amt1) || amt1 <= 0 || isNaN(amt2) || amt2 <= 0) {
+    return alert("Enter valid amounts for both tokens");
   }
 
-  async function handleAddLiquidity() {
-    if (!account?.address || !selectedPool) return alert("Connect wallet and select a pool");
-    
-    const amt1 = parseFloat(addAmount1);
-    const amt2 = parseFloat(addAmount2);
-    
-    if (isNaN(amt1) || amt1 <= 0 || isNaN(amt2) || amt2 <= 0) {
-      return alert("Enter valid amounts for both tokens");
-    }
+  const token1Symbol = selectedPool.token1Symbol || getTokenSymbol(selectedPool.token1);
+  const token2Symbol = selectedPool.token2Symbol || getTokenSymbol(selectedPool.token2);
+  
+  const token1Data = tokenBalances.find(t => t.symbol === token1Symbol);
+  const token2Data = tokenBalances.find(t => t.symbol === token2Symbol);
 
-    const token1Symbol = selectedPool.token1Symbol || getTokenSymbol(selectedPool.token1);
-    const token2Symbol = selectedPool.token2Symbol || getTokenSymbol(selectedPool.token2);
-    
-    const token1Data = tokenBalances.find(t => t.symbol === token1Symbol);
-    const token2Data = tokenBalances.find(t => t.symbol === token2Symbol);
+  if (!token1Data || !token2Data) return alert("Token data not found");
+  if (amt1 > token1Data.totalBalance) return alert(`Insufficient ${token1Symbol} balance`);
+  if (amt2 > token2Data.totalBalance) return alert(`Insufficient ${token2Symbol} balance`);
 
-    if (!token1Data || !token2Data) return alert("Token data not found");
-    if (amt1 > token1Data.totalBalance) return alert(`Insufficient ${token1Symbol} balance`);
-    if (amt2 > token2Data.totalBalance) return alert(`Insufficient ${token2Symbol} balance`);
+  try {
+    const tx = new Transaction();
 
-    try {
-      const tx = new Transaction();
+    // Check if tokens are SUI
+    const isSUI1 = selectedPool.token1 === "0x2::sui::SUI";
+    const isSUI2 = selectedPool.token2 === "0x2::sui::SUI";
 
+    let splitCoin1;
+    if (isSUI1) {
+      [splitCoin1] = tx.splitCoins(tx.gas, [tx.pure.u64(Math.floor(amt1 * 1e9))]);
+    } else {
       const coins1 = selectCoinsForAmount(token1Symbol, amt1);
-      const coins2 = selectCoinsForAmount(token2Symbol, amt2);
-
       let coin1Arg = tx.object(coins1[0]);
       if (coins1.length > 1) {
         tx.mergeCoins(coin1Arg, coins1.slice(1).map(id => tx.object(id)));
       }
-      const [splitCoin1] = tx.splitCoins(coin1Arg, [tx.pure.u64(Math.floor(amt1 * 1e9))]);
+      [splitCoin1] = tx.splitCoins(coin1Arg, [tx.pure.u64(Math.floor(amt1 * 1e9))]);
+    }
 
+    let splitCoin2;
+    if (isSUI2) {
+      [splitCoin2] = tx.splitCoins(tx.gas, [tx.pure.u64(Math.floor(amt2 * 1e9))]);
+    } else {
+      const coins2 = selectCoinsForAmount(token2Symbol, amt2);
       let coin2Arg = tx.object(coins2[0]);
       if (coins2.length > 1) {
         tx.mergeCoins(coin2Arg, coins2.slice(1).map(id => tx.object(id)));
       }
-      const [splitCoin2] = tx.splitCoins(coin2Arg, [tx.pure.u64(Math.floor(amt2 * 1e9))]);
-
-      tx.moveCall({
-        target: `${TESTNET_PACKAGE_ID}::pool::add_liquidity`,
-        typeArguments: [selectedPool.token1, selectedPool.token2],
-        arguments: [tx.object(selectedPool.id), splitCoin1, splitCoin2],
-      });
-
-      await signAndExecuteTransaction(
-        { transaction: tx },
-        {
-          onSuccess: () => {
-            alert("Liquidity added successfully!");
-            setShowAddForm(false);
-            setAddAmount1("");
-            setAddAmount2("");
-          },
-          onError: (error) => {
-            console.error(error);
-            alert("Failed to add liquidity: " + error.message);
-          }
-        }
-      );
-    } catch (e) {
-      console.error(e);
-      alert("Failed to add liquidity: " + (e as any).message);
+      [splitCoin2] = tx.splitCoins(coin2Arg, [tx.pure.u64(Math.floor(amt2 * 1e9))]);
     }
+
+    tx.moveCall({
+      target: `${TESTNET_PACKAGE_ID}::pool::add_liquidity`,
+      typeArguments: [selectedPool.token1, selectedPool.token2],
+      arguments: [tx.object(selectedPool.id), splitCoin1, splitCoin2],
+    });
+
+    await signAndExecuteTransaction(
+      { transaction: tx },
+      {
+        onSuccess: () => {
+          alert("Liquidity added successfully!");
+          setShowAddForm(false);
+          setAddAmount1("");
+          setAddAmount2("");
+        },
+        onError: (error) => {
+          console.error(error);
+          alert("Failed to add liquidity: " + error.message);
+        }
+      }
+    );
+  } catch (e) {
+    console.error(e);
+    alert("Failed to add liquidity: " + (e as any).message);
   }
+}
+
+
 
   const filteredPools = pools.filter((pool) => {
     const token1 = pool.token1Symbol || getTokenSymbol(pool.token1);
