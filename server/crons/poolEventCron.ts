@@ -2,6 +2,7 @@
 import cron from "node-cron";
 import { prisma } from "../prisma/prismaClient";
 import { getPoolEvents, getPoolsFromEvents, saveEventsToDB, savePoolsToDB } from "../services/poolIndexer";
+import { containerId } from "../config/network";
 
 const EVENT_ID = "poolEvents";
 const POLL_LIMIT = 50;
@@ -59,7 +60,7 @@ let apiCursor: ApiCursor | null = null;
           }
 
           // Process pools
-          const pools = await getPoolsFromEvents();
+          const pools = await getPoolsFromEvents(containerId);
           await savePoolsToDB(pools);
 
           console.log("Pools saved to DB:", pools.length);

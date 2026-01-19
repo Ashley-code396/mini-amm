@@ -61,6 +61,7 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const pools = await prisma.pool.findMany({
       orderBy: { createdAt: 'desc' },
+      take: 50,
     });
 
     // Fetch metadata for all unique token types
