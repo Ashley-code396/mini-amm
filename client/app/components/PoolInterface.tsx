@@ -346,10 +346,15 @@ export default function PoolInterface() {
         [splitCoin2] = tx.splitCoins(coin2Arg, [tx.pure.u64(Math.floor(amt2 * 1e9))]);
       }
 
-      tx.moveCall({
-        target: `${TESTNET_PACKAGE_ID}::pool::add_liquidity`,
+       tx.moveCall({
+        target: `${TESTNET_PACKAGE_ID}::mini_amm::add_liquidity_to_pool`,
         typeArguments: [selectedPool.token1, selectedPool.token2],
-        arguments: [tx.object(selectedPool.id), splitCoin1, splitCoin2],
+        arguments: [
+          tx.object(CONTAINER_ID),
+          tx.pure.id(selectedPool.id),
+          splitCoin1,
+          splitCoin2
+        ],
       });
 
       await signAndExecuteTransaction(
