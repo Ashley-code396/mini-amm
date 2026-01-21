@@ -10,6 +10,7 @@ import {
 
 import { TESTNET_PACKAGE_ID, CONTAINER_ID } from "../constants";
 import { BACKEND_URL } from "../constants";
+import { Inputs } from "@mysten/sui/transactions";
 
 
 type PoolSummary = {
