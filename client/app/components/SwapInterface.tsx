@@ -253,9 +253,6 @@ export default function SwapInterface() {
     if (!fromTokenData) return alert("Token data not found");
     if (amt > fromTokenData.totalBalance) return alert(`Insufficient ${fromToken} balance`);
 
-    const expectedOutput = parseFloat(toAmount);
-    const minOutput = expectedOutput * (1 - slippage / 100);
-
     try {
       setLoading(true);
       const tx = new Transaction();
@@ -280,15 +277,19 @@ export default function SwapInterface() {
       const sym1 = selectedPool.token1Symbol || getTokenSymbol(selectedPool.token1);
       const isAtoB = fromToken === sym1;
 
-      const swapFunction = isAtoB ? "swap_a_for_b" : "swap_b_for_a";
+      // Use the correct function name from mini_amm module
+      const swapFunction = isAtoB ? "swap_a_for_b_in_pool" : "swap_b_for_a_in_pool";
 
       tx.moveCall({
-        target: `${TESTNET_PACKAGE_ID}::swap::${swapFunction}`,
+        target: `${TESTNET_PACKAGE_ID}::mini_amm::${swapFunction}`,
         typeArguments: [selectedPool.token1, selectedPool.token2],
-        arguments: [tx.object(selectedPool.id), coinIn],
+        arguments: [
+          tx.object(CONTAINER_ID),
+          tx.pure.id(selectedPool.id),
+          coinIn
+        ],
       });
 
-      
       await signAndExecuteTransaction(
         { transaction: tx },
         {
