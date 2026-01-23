@@ -1,6 +1,6 @@
-# Mini AMM — Decentralized Exchange
+# Mini AMM — Decentralized AMM
 
-A full-stack decentralized exchange built on Sui blockchain, featuring an Automated Market Maker (AMM) with constant-product (x * y = k) invariant for token swaps and liquidity pools.
+A full-stack decentralized Automated Market Maker (AMM) built on Sui blockchain, featuring constant-product (x * y = k) invariant for token swaps and liquidity pools.
 
 ## Architecture Overview
 
@@ -46,9 +46,8 @@ A service layer that provides additional functionality not suitable for on-chain
 
 - **API Endpoints**:
   - `/api/pools`: Get all pools with current stats
-  - `/api/tokens`: List supported tokens
   - `/api/transactions`: Historical transaction data
-  - `/api/analytics`: Trading volume and liquidity metrics
+
 
 - **Services**:
   - Event indexing and database synchronization
@@ -76,8 +75,7 @@ A modern, responsive web interface for users to interact with the AMM.
 ### Main Components:
 - `PoolInterface.tsx`: Main component for pool interactions
 - `SwapInterface.tsx`: Token swap interface
-- `WalletConnector.tsx`: Wallet connection and management
-- `TransactionHistory.tsx`: User transaction history
+- `TransactionsInterface.tsx`: User transaction history
 
 ## Development Setup
 
@@ -98,7 +96,7 @@ sui move build
 sui move test
 
 # Publish to testnet (example)
-sui client publish --gas-budget 100000000
+sui client publish 
 ```
 
 ### 2. Backend Server
@@ -131,7 +129,7 @@ cp .env.local.example .env.local
 # Edit .env.local with your configuration
 
 # Start development server
-npm run dev
+npm start
 ```
 
 ## Workflow
@@ -153,7 +151,6 @@ npm run dev
 ## Security Considerations
 
 - All sensitive operations require wallet signatures
-- Smart contracts include reentrancy protection
 - Frontend validates all user inputs
 - Backend implements rate limiting and request validation
 
@@ -161,9 +158,6 @@ npm run dev
 
 Contributions are welcome! Please open an issue or submit a pull request.
 
-## License
-
-MIT
 
 ## Project overview
 
@@ -333,7 +327,7 @@ If you modify the Move code and want to publish to local Sui devnet or testnet:
 # build and publish (example; your environment may vary)
 cd contracts
 sui move build
-sui client publish --path ./build/ --gas-budget <amount>
+sui client publish
 ```
 
 Publishing returns the package id which the front-end must use (the `TESTNET_PACKAGE_ID` constant in `client/app/constants.ts` or similar). The front-end relies on the package id to fetch package-owned objects (pools, container) and call move functions.
@@ -379,22 +373,38 @@ On-chain, `create_pool` consumes the provided coins, mints a `LiquidityPool<A,B>
 2. Contract applies fee, computes output using constant-product formula, updates reserves, and returns the output coin.
 
 
-## File structure (high level)
+## File Structure
 
 ```
-client/                 # Next.js front-end
-  app/
-    components/
-      PoolInterface.tsx  # main pool UI, wallet coin parsing, create/add/remove liquidity flows
-contracts/
-  sources/
-    mini_amm.move
-    pool.move
-    swap.move
-    treasury.move
-    admin.move
-  build/
-  tests/
+.
+├── client/                 # Next.js frontend application
+│   ├── app/                # App router pages and components
+│   │   ├── components/     # Reusable UI components
+│   │   │   ├── PoolInterface.tsx    # Pool management interface
+│   │   │   ├── SwapInterface.tsx    # Token swap interface
+│   │   │   └── TransactionsInterface.tsx  # Transaction history
+│   │   └── ...
+│   └── ...
+│
+├── server/                 # Backend server (Node.js/Express)
+│   ├── config/            # Configuration files
+│   ├── crons/             # Scheduled tasks
+│   ├── prisma/            # Database schema and migrations
+│   ├── routes/            # API route handlers
+│   │   ├── pools.ts       # Pool-related endpoints
+│   │   └── transactions.ts # Transaction endpoints
+│   ├── services/          # Business logic
+│   └── app.ts             # Express application setup
+│
+└── contracts/             # Sui Move smart contracts
+    ├── sources/           # Move source files
+    │   ├── mini_amm.move  # Main AMM module
+    │   ├── pool.move      # Pool management
+    │   ├── swap.move      # Swap functionality
+    │   ├── treasury.move  # Fee management
+    │   └── admin.move     # Admin controls
+    ├── tests/             # Move tests
+    └── Move.toml          # Move package configuration
 ```
 
 
