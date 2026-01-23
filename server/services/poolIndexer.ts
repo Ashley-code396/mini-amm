@@ -7,7 +7,7 @@ import { InputJsonValue } from "@prisma/client/runtime/client";
 // Event types to track
 const EVENT_MODULES = {
   pool: ["PoolInitialized", "LiquidityAdded", "LiquidityRemoved"],
-  swap: ["SwapExecuted"],
+  swap: ["SwapEvent"],
 };
 
 // Helper function to unwrap Coin<> wrapper if present
@@ -216,7 +216,7 @@ export const saveUserTransactions = async (events: SuiEvent[], containerId: stri
     let type = "Unknown";
     if (ev.type.includes("LiquidityAdded")) type = "LiquidityAdded";
     else if (ev.type.includes("LiquidityRemoved")) type = "LiquidityRemoved";
-    else if (ev.type.includes("SwapExecuted")) type = "SwapExecuted";
+    else if (ev.type.includes("SwapEvent")) type = "SwapEvent";
 
     // Get pool ID
     const poolId = payload.lp_id || payload.pool_id || null;
@@ -239,7 +239,7 @@ export const saveUserTransactions = async (events: SuiEvent[], containerId: stri
       amount1 = payload.amount_a?.toString() || null;
       amount2 = payload.amount_b?.toString() || null;
       lpAmount = (payload.lp_minted || payload.lp_burned)?.toString() || null;
-    } else if (type === "SwapExecuted") {
+    } else if (type === "SwapEvent") {
       amount1 = payload.amount_in?.toString() || null;
       amount2 = payload.amount_out?.toString() || null;
     }
