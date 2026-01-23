@@ -1,36 +1,169 @@
-# Mini AMM — Overview and Developer Guide
+# Mini AMM — Decentralized Exchange
 
-This repository contains a minimal Automated Market Maker (AMM) implementation written in Move and a Next.js TypeScript front-end for interacting with it. The AMM uses the constant-product (x * y = k) invariant to provide token swaps and liquidity pools.
+A full-stack decentralized exchange built on Sui blockchain, featuring an Automated Market Maker (AMM) with constant-product (x * y = k) invariant for token swaps and liquidity pools.
 
-This README documents the project structure, the on-chain Move modules, the constant-product AMM math, liquidity provisioning and removal, LP tokens, fees, impermanent loss concepts, front-end wiring, and instructions for building, testing, and deploying locally.
+## Architecture Overview
 
----
+The system is divided into three main components that work together to provide a seamless decentralized trading experience:
 
-## Table of contents
+1. **Smart Contracts (Move)**: On-chain logic for AMM operations
+2. **Backend Server (Node.js/Express)**: Indexing and data aggregation layer
+3. **Web Frontend (Next.js)**: User interface for interacting with the AMM
 
-- Project overview
-- Core contracts and modules
-  - mini_amm.move (high-level)
-  - pool.move
-  - swap.move
-  - treasury.move
-  - admin.move
-- AMM theory: constant-product rule (x * y = k)
-  - Swap pricing and slippage
-  - Fees
-  - Liquidity provisioning & LP tokens
-  - Impermanent loss (brief)
-- Front-end (client/) overview
-  - `PoolInterface.tsx` and wallet interactions
-  - Transaction flow: splitCoins and moveCall
-- Running locally
-  - Prerequisites
-  - Build and run front-end
-  - Build, test, and publish Move contracts
-- Developer notes & security considerations
-- Next steps and roadmap
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│                 │     │                 │     │                 │
+│   Frontend      │◄───►│   Backend       │◄───►│   Sui           │
+│   (Next.js)     │     │   (Node/Express)│     │   Blockchain    │
+│                 │     │                 │     │   (Move)        │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
 
----
+## 1. Smart Contracts (Move)
+
+The on-chain component that handles all AMM operations. Built using Move on the Sui blockchain.
+
+### Core Modules:
+
+- **mini_amm.move**: Main entry point and container for pools
+- **pool.move**: Manages liquidity pools and LP tokens
+- **swap.move**: Handles token swaps with constant-product formula
+- **treasury.move**: Manages protocol fees and treasury operations
+- **admin.move**: Administrative functions and access control
+
+### Key Features:
+- Constant product formula (x * y = k) for price determination
+- Multi-pool support for different token pairs
+- Liquidity provider fee (0.3% per swap)
+- Slippage protection
+- Admin-controlled fee parameters
+
+## 2. Backend Server (Node.js/Express)
+
+A service layer that provides additional functionality not suitable for on-chain execution.
+
+### Key Components:
+
+- **API Endpoints**:
+  - `/api/pools`: Get all pools with current stats
+  - `/api/tokens`: List supported tokens
+  - `/api/transactions`: Historical transaction data
+  - `/api/analytics`: Trading volume and liquidity metrics
+
+- **Services**:
+  - Event indexing and database synchronization
+  - Historical data aggregation
+  - Price and volume calculations
+  - Transaction simulation
+
+- **Database (PostgreSQL)**:
+  - Stores indexed blockchain data
+  - Caches pool and token information
+  - Maintains transaction history
+
+## 3. Web Frontend (Next.js)
+
+A modern, responsive web interface for users to interact with the AMM.
+
+### Key Features:
+- Wallet connection (Sui Wallet, etc.)
+- Pool creation and management
+- Token swapping interface
+- Liquidity provision and removal
+- Transaction history
+- Real-time price and pool statistics
+
+### Main Components:
+- `PoolInterface.tsx`: Main component for pool interactions
+- `SwapInterface.tsx`: Token swap interface
+- `WalletConnector.tsx`: Wallet connection and management
+- `TransactionHistory.tsx`: User transaction history
+
+## Development Setup
+
+### Prerequisites
+- Node.js 16+
+- Sui CLI
+- PostgreSQL (for backend)
+- Yarn or npm
+
+### 1. Smart Contracts
+
+```bash
+# Build contracts
+cd contracts
+sui move build
+
+# Test contracts
+sui move test
+
+# Publish to testnet (example)
+sui client publish --gas-budget 100000000
+```
+
+### 2. Backend Server
+
+```bash
+# Install dependencies
+cd server
+npm install
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your configuration
+
+# Run database migrations
+npx prisma migrate dev
+
+# Start development server
+npm run dev
+```
+
+### 3. Frontend
+
+```bash
+# Install dependencies
+cd client
+npm install
+
+# Set up environment variables
+cp .env.local.example .env.local
+# Edit .env.local with your configuration
+
+# Start development server
+npm run dev
+```
+
+## Workflow
+
+### Adding a New Token Pair
+1. Frontend calls `create_pool` on the smart contract
+2. Contract validates parameters and creates new pool
+3. Backend indexes the new pool and adds it to the database
+4. Frontend updates UI to show the new pool
+
+### Making a Swap
+1. User selects tokens and amount in the frontend
+2. Frontend queries contract for expected output amount
+3. User approves transaction in their wallet
+4. Frontend submits transaction to the blockchain
+5. Backend indexes the swap event
+6. UI updates to reflect the new pool state
+
+## Security Considerations
+
+- All sensitive operations require wallet signatures
+- Smart contracts include reentrancy protection
+- Frontend validates all user inputs
+- Backend implements rate limiting and request validation
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request.
+
+## License
+
+MIT
 
 ## Project overview
 
@@ -265,7 +398,6 @@ contracts/
 ```
 
 
-
 ## Next steps and roadmap
 
 - Improve UI UX for token selection: show token icons and decimals, and fetch metadata.
@@ -279,6 +411,4 @@ contracts/
 
 Contributions, bug fixes, and improvements are welcome. Please open issues or PRs describing the change and include tests where feasible.
 
-
 ---
-
