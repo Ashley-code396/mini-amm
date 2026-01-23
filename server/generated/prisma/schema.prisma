@@ -5,7 +5,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
- 
 }
 
 /// Tracks Sui events emitted by mini_amm modules
@@ -46,12 +45,12 @@ model userTransaction {
   id          Int      @id @default(autoincrement())
   userAddress String
   poolId      String?
-  type        String   // "LiquidityAdded", "LiquidityRemoved", "SwapExecuted"
+  type        String // "LiquidityAdded", "LiquidityRemoved", "SwapExecuted"
   token1      String?
   token2      String?
-  amount1     String?  // Changed to String to handle BigInt
-  amount2     String?  // Changed to String to handle BigInt
-  lpAmount    String?  // LP tokens minted/burned
+  amount1     String? // Changed to String to handle BigInt
+  amount2     String? // Changed to String to handle BigInt
+  lpAmount    String? // LP tokens minted/burned
   txDigest    String   @unique
   timestamp   BigInt
   createdAt   DateTime @default(now())

@@ -1,17 +1,14 @@
-import { EventId, SuiEvent, SuiEventFilter, SuiObjectData } from "@mysten/sui/client";
+import { EventId, SuiEvent, SuiEventFilter } from "@mysten/sui/client";
 import { client } from "./suiClient";
 import { prisma } from "../prisma/prismaClient";
 import { packageId } from "../config/network";
 import { InputJsonValue } from "@prisma/client/runtime/client";
-import { PoolEventPayload } from "../types/poolEvents";
-
 
 // Event types to track
-const POOL_EVENT_TYPES = [
-  "PoolInitialized",
-  "LiquidityAdded",
-  "LiquidityRemoved",
-] as const;
+const EVENT_MODULES = {
+  pool: ["PoolInitialized", "LiquidityAdded", "LiquidityRemoved"],
+  swap: ["SwapExecuted"],
+};
 
 // Helper function to unwrap Coin<> wrapper if present
 function unwrapCoinType(type: string): string {
@@ -25,10 +22,6 @@ async function getPoolsBagId(containerId: string): Promise<string | null> {
     options: { showContent: true },
   });
 
-  console.log("  objectId:", container.data?.objectId);
-  console.log("  type:", container.data?.type);
-  console.log("  has content:", !!container.data?.content);
-
   if (
     container.data?.content?.dataType !== "moveObject" ||
     !(container.data.content.fields as any)?.pools
@@ -37,31 +30,20 @@ async function getPoolsBagId(containerId: string): Promise<string | null> {
     return null;
   }
 
-  // Bag is inside fields.pools.fields.id.id (NOT fields.pools.id.id)
   const bagObj = (container.data.content.fields as any).pools;
   const bagIdStr = bagObj?.fields?.id?.id || null;
-  console.log("Bag object:", bagObj, "bagIdStr:", bagIdStr);
-
   return bagIdStr;
 }
 
-// Helper to parse LiquidityPool<A, B> generics with proper bracket matching
+// Helper to parse LiquidityPool<A, B> generics
 function parsePoolGenerics(poolType: string): { token1: string; token2: string } | null {
-  // Find LiquidityPool< and then match brackets to find the generics
   const lpIndex = poolType.indexOf("LiquidityPool<");
-  if (lpIndex === -1) {
-    console.log("⚠ No LiquidityPool found in:", poolType);
-    return null;
-  }
+  if (lpIndex === -1) return null;
 
-  // Extract everything after "LiquidityPool<"
   const afterLP = poolType.substring(lpIndex + "LiquidityPool<".length);
-  
-  // Now we need to find the comma that separates token1 and token2
-  // We need to count angle brackets to handle nested generics
   let depth = 0;
   let commaIndex = -1;
-  
+
   for (let i = 0; i < afterLP.length; i++) {
     const char = afterLP[i];
     if (char === '<') depth++;
@@ -71,16 +53,11 @@ function parsePoolGenerics(poolType: string): { token1: string; token2: string }
       break;
     }
   }
-  
-  if (commaIndex === -1) {
-    console.log("⚠ Could not find comma separator in:", afterLP);
-    return null;
-  }
-  
-  // Extract token1 and token2
+
+  if (commaIndex === -1) return null;
+
   const token1Raw = afterLP.substring(0, commaIndex).trim();
-  
-  // For token2, find the closing > at depth 0
+
   let endIndex = -1;
   depth = 0;
   for (let i = commaIndex + 1; i < afterLP.length; i++) {
@@ -94,18 +71,13 @@ function parsePoolGenerics(poolType: string): { token1: string; token2: string }
       depth--;
     }
   }
-  
-  if (endIndex === -1) {
-    console.log("⚠ Could not find end of generics");
-    return null;
-  }
-  
+
+  if (endIndex === -1) return null;
+
   const token2Raw = afterLP.substring(commaIndex + 1, endIndex).trim();
-  
   const token1 = unwrapCoinType(token1Raw);
   const token2 = unwrapCoinType(token2Raw);
 
-  console.log(`✓ Extracted tokens: ${token1} / ${token2}`);
   return { token1, token2 };
 }
 
@@ -114,56 +86,29 @@ export async function getTokenTypesFromPoolsBag(
   lpId: string
 ): Promise<{ token1: string; token2: string } | null> {
   try {
-    // 1️⃣ Resolve Bag ID
     const bagId = await getPoolsBagId(containerId);
-    console.log("bag id:", bagId);
     if (!bagId) return null;
 
-    console.log(`🔍 Using pools bag: ${bagId}`);
-
-    // 2️⃣ Read pools from the bag
     const bag = await client.getDynamicFields({
       parentId: bagId,
       limit: 100,
     });
 
-    console.log("📦 Bag fetch result:");
-    console.log("  total fields:", bag.data.length);
-    console.log("  hasNextPage:", bag.hasNextPage);
-    console.log("  nextCursor:", bag.nextCursor);
-
     const poolField = bag.data.find(f => f.name.value === lpId);
-    if (!poolField) {
-      console.log(`⚠ Pool ${lpId} not found in bag`);
-      return null;
-    }
+    if (!poolField) return null;
 
-    // 3️⃣ Fetch pool object type
     const poolObject = await client.getObject({
       id: poolField.objectId,
       options: { showType: true },
     });
 
-    console.log("🔹 Fetched pool object:");
-    console.log("  objectId:", poolField.objectId);
-    console.log("  type:", poolObject.data?.type);
-
     const type = poolObject.data?.type;
     if (!type) return null;
 
-    // 4️⃣ Extract pool type from dynamic_field::Field<Key, Value>
-    // The type looks like: 0x2::dynamic_field::Field<0x2::object::ID, PackageId::pool::LiquidityPool<TokenA, TokenB>>
-    // We need to extract the Value type (second generic) and then parse its generics
-    
     const fieldMatch = type.match(/Field<[^,]+,\s*(.+)>$/);
-    if (!fieldMatch) {
-      console.log("⚠ Not a Field type, trying direct parse");
-      return parsePoolGenerics(type);
-    }
+    if (!fieldMatch) return parsePoolGenerics(type);
 
     const poolType = fieldMatch[1].trim();
-    console.log("  extracted pool type:", poolType);
-    
     return parsePoolGenerics(poolType);
   } catch (err) {
     console.error("❌ Token extraction failed:", err);
@@ -171,8 +116,7 @@ export async function getTokenTypesFromPoolsBag(
   }
 }
 
-
-// --- Fetch pool events from chain ---
+// Fetch pool events
 export const getPoolEvents = async ({
   cursor,
   limit = 50,
@@ -180,23 +124,58 @@ export const getPoolEvents = async ({
   cursor?: EventId | null;
   limit?: number;
 }) => {
-  let allEvents: SuiEvent[] = [];
-  let nextCursor = cursor;
+  return getModuleEvents({ moduleName: "pool", cursor, limit });
+};
 
-  for (const eventName of POOL_EVENT_TYPES) {
+// Fetch swap events
+export const getSwapEvents = async ({
+  cursor,
+  limit = 50,
+}: {
+  cursor?: EventId | null;
+  limit?: number;
+}) => {
+  return getModuleEvents({ moduleName: "swap", cursor, limit });
+};
+
+// Generic module event fetcher
+export const getModuleEvents = async ({
+  moduleName,
+  cursor,
+  limit = 50,
+}: {
+  moduleName: keyof typeof EVENT_MODULES;
+  cursor?: EventId | null;
+  limit?: number;
+}) => {
+  const eventNames = EVENT_MODULES[moduleName];
+  let allEvents: SuiEvent[] = [];
+  let nextCursor: EventId | null = cursor ?? null;
+
+  for (const eventName of eventNames) {
+    const typeCursor = cursor; // NEW: separate cursor for this type
     const filter: SuiEventFilter = {
-      MoveEventType: `${packageId}::pool::${eventName}`,
+      MoveEventType: `${packageId}::${moduleName}::${eventName}`,
     };
 
     const eventsResult = await client.queryEvents({
       query: filter,
-      cursor: nextCursor,
+      cursor: typeCursor,
       limit,
       order: "ascending",
     });
 
     allEvents = allEvents.concat(eventsResult.data as SuiEvent[]);
-    nextCursor = eventsResult.nextCursor ?? nextCursor;
+    // Don't update nextCursor here — handle it per type if needed
+  }
+
+  // You can optionally compute nextCursor based on latest event in allEvents
+  const latestEvent = allEvents[allEvents.length - 1];
+  if (latestEvent) {
+    nextCursor = {
+      txDigest: latestEvent.id.txDigest,
+      eventSeq: latestEvent.id.eventSeq,
+    };
   }
 
   return {
@@ -206,12 +185,11 @@ export const getPoolEvents = async ({
   };
 };
 
-// --- Save events to DB ---
+
+// Save events to DB
 export const saveEventsToDB = async (events: SuiEvent[]) => {
   for (const ev of events) {
     const payload = ev.parsedJson as unknown as InputJsonValue;
-
-    console.log("Saving pool event:", ev.id.txDigest, "Type:", ev.type);
 
     await prisma.poolEvent.upsert({
       where: { digest: ev.id.txDigest },
@@ -228,34 +206,81 @@ export const saveEventsToDB = async (events: SuiEvent[]) => {
   }
 };
 
-// --- Process unprocessed events into pools using the bag ---
+// Save user transactions (liquidity + swaps)
+export const saveUserTransactions = async (events: SuiEvent[], containerId: string) => {
+  for (const ev of events) {
+    const payload = ev.parsedJson as any;
+    if (!ev.sender) continue;
+
+    // Determine transaction type
+    let type = "Unknown";
+    if (ev.type.includes("LiquidityAdded")) type = "LiquidityAdded";
+    else if (ev.type.includes("LiquidityRemoved")) type = "LiquidityRemoved";
+    else if (ev.type.includes("SwapExecuted")) type = "SwapExecuted";
+
+    // Get pool ID
+    const poolId = payload.lp_id || payload.pool_id || null;
+
+    // Get token types from bag if poolId exists
+    let token1 = null;
+    let token2 = null;
+    if (poolId) {
+      const tokenTypes = await getTokenTypesFromPoolsBag(containerId, poolId);
+      token1 = tokenTypes?.token1 || null;
+      token2 = tokenTypes?.token2 || null;
+    }
+
+    // Extract amounts based on event type
+    let amount1 = null;
+    let amount2 = null;
+    let lpAmount = null;
+
+    if (type === "LiquidityAdded" || type === "LiquidityRemoved") {
+      amount1 = payload.amount_a?.toString() || null;
+      amount2 = payload.amount_b?.toString() || null;
+      lpAmount = (payload.lp_minted || payload.lp_burned)?.toString() || null;
+    } else if (type === "SwapExecuted") {
+      amount1 = payload.amount_in?.toString() || null;
+      amount2 = payload.amount_out?.toString() || null;
+    }
+
+    await prisma.userTransaction.upsert({
+      where: { txDigest: ev.id.txDigest },
+      update: {},
+      create: {
+        userAddress: ev.sender,
+        poolId,
+        type,
+        token1,
+        token2,
+        amount1,
+        amount2,
+        lpAmount,
+        txDigest: ev.id.txDigest,
+        timestamp: Number(ev.timestampMs),
+      },
+    });
+  }
+};
+
+// Process pool events
 export const getPoolsFromEvents = async (containerId: string) => {
   const events = await prisma.poolEvent.findMany({ where: { processed: false } });
   const poolsWithTokenTypes = [];
 
   for (const ev of events) {
-    const payload = ev.payload as unknown as PoolEventPayload;
+    const payload = ev.payload as any;
+    const lpId = payload.lp_id || null;
+    if (!lpId) continue;
 
-    const lpId = "lp_id" in payload ? payload.lp_id : null;
-    if (!lpId) {
-      console.log("⚠ No pool ID found in event, skipping...");
-      continue;
-    }
-
-    // Fetch token types directly from pools bag
     const tokenTypes = await getTokenTypesFromPoolsBag(containerId, lpId);
 
     poolsWithTokenTypes.push({
       lp_id: lpId,
       type: ev.type,
-      amount_a: "amount_a" in payload ? payload.amount_a : 0,
-      amount_b: "amount_b" in payload ? payload.amount_b : 0,
-      lp_change:
-        "lp_minted" in payload
-          ? payload.lp_minted
-          : "lp_burned" in payload
-          ? payload.lp_burned
-          : 0,
+      amount_a: payload.amount_a || 0,
+      amount_b: payload.amount_b || 0,
+      lp_change: payload.lp_minted || payload.lp_burned || 0,
       timestamp: Number(ev.timestamp),
       token1: tokenTypes?.token1 || "",
       token2: tokenTypes?.token2 || "",
@@ -265,7 +290,7 @@ export const getPoolsFromEvents = async (containerId: string) => {
   return poolsWithTokenTypes;
 };
 
-// --- Save processed pools ---
+// Save processed pools
 export const savePoolsToDB = async (pools: {
   lp_id: string | null;
   type: string;
@@ -278,13 +303,6 @@ export const savePoolsToDB = async (pools: {
 }[]) => {
   for (const pool of pools) {
     if (!pool.lp_id) continue;
-
-    console.log("Saving pool:", pool.lp_id);
-    if (pool.token1 && pool.token2) {
-      console.log(`  Tokens: ${pool.token1} / ${pool.token2}`);
-    } else {
-      console.log(`  ⚠ Warning: Token types not found`);
-    }
 
     const existingPool = await prisma.pool.findUnique({ where: { poolId: pool.lp_id } });
 
@@ -313,7 +331,6 @@ export const savePoolsToDB = async (pools: {
     }
   }
 
-  // Mark events as processed
   await prisma.poolEvent.updateMany({
     where: { processed: false },
     data: { processed: true },

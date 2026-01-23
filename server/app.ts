@@ -9,6 +9,8 @@ import { FRONTEND_URL } from './config';
 
 // Import routes
 import poolsRouter from './routes/pools';
+import userTransactionsRouter from './routes/transactions';
+
 
 // Import cron job
 import { startPoolEventCron } from './crons/poolEventCron';
@@ -38,6 +40,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Routes ---
 app.use('/api/pools', poolsRouter);
+app.use('/api/transactions', userTransactionsRouter);
+
 
 // --- 404 handler ---
 app.use((req: Request, res: Response, next: NextFunction) => {
