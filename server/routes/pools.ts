@@ -82,6 +82,8 @@ function getFallbackIconUrl(symbol: string): string {
   return `https://api.dicebear.com/7.x/identicon/svg?seed=${symbol}&backgroundColor=3b82f6`;
 }
 
+
+
 // GET /api/pools - fetch all pools from DB with enhanced data
 router.get('/', async (req: Request, res: Response) => {
   try {
