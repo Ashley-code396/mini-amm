@@ -41,6 +41,7 @@ public fun swap_a_for_b<A, B>(
 ): Coin<B> {
     let amount_in = coin::value(&coin_in);
     assert!(amount_in > 0, EZeroAmountSwap);
+    
 
     // Compute fees
     let fee_total = amount_in * FEE_BPS / BPS_DIVISOR;
