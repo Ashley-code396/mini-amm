@@ -30,6 +30,25 @@ type TokenBalance = {
   type: string;
   totalBalance: number;
   coinObjects: { objectId: string; balance: number }[];
+  iconUrl?: string | null;
+};
+
+type CoinMetadata = {
+  symbol: string;
+  name: string;
+  decimals: number;
+  iconUrl: string | null;
+};
+
+// Known token icons (fallback mapping)
+const KNOWN_TOKEN_ICONS: Record<string, string> = {
+  'SUI': 'https://coin-images.coingecko.com/coins/images/26375/small/sui_asset.jpeg',
+  'USDC': 'https://coin-images.coingecko.com/coins/images/6319/small/usdc.png',
+  'USDT': 'https://coin-images.coingecko.com/coins/images/325/small/Tether.png',
+  'WETH': 'https://coin-images.coingecko.com/coins/images/2518/small/weth.png',
+  'WBTC': 'https://coin-images.coingecko.com/coins/images/7598/small/wrapped_bitcoin_wbtc.png',
+  'SOL': 'https://coin-images.coingecko.com/coins/images/4128/small/solana.png',
+  'CETUS': 'https://coin-images.coingecko.com/coins/images/30556/small/cetus.png',
 };
 
 export default function SwapInterface() {
@@ -53,20 +72,68 @@ export default function SwapInterface() {
   const [showFromTokens, setShowFromTokens] = useState(false);
   const [showToTokens, setShowToTokens] = useState(false);
 
-  function getTokenSymbol(type: string): string {
-    if (!type) return "";
-    const lower = type.toLowerCase();
-    if (lower.includes("sui") && !lower.includes("usdc") && !lower.includes("usdt")) return "SUI";
-    if (lower.includes("usdc")) return "USDC";
-    if (lower.includes("usdt")) return "USDT";
-    if (lower.includes("weth")) return "WETH";
-    if (lower.includes("wbtc")) return "WBTC";
-    if (lower.includes("wal")) return "WAL";
-    if (lower.includes("sol")) return "SOL";
-    if (lower.includes("cetus")) return "CETUS";
+  // Cache for coin metadata
+  const [metadataCache, setMetadataCache] = useState<Map<string, CoinMetadata | null>>(new Map());
+
+  // Fetch coin metadata from blockchain
+  async function getCoinMetadata(coinType: string): Promise<CoinMetadata | null> {
+    // Check cache first
+    if (metadataCache.has(coinType)) {
+      return metadataCache.get(coinType) || null;
+    }
+
+    try {
+      const metadata = await client.getCoinMetadata({ coinType });
+      
+      if (metadata) {
+        const result: CoinMetadata = {
+          symbol: metadata.symbol,
+          name: metadata.name,
+          decimals: metadata.decimals,
+          iconUrl: metadata.iconUrl || null
+        };
+        
+        setMetadataCache(prev => new Map(prev).set(coinType, result));
+        return result;
+      }
+      
+      setMetadataCache(prev => new Map(prev).set(coinType, null));
+      return null;
+    } catch (error) {
+      console.error(`Error fetching metadata for ${coinType}:`, error);
+      setMetadataCache(prev => new Map(prev).set(coinType, null));
+      return null;
+    }
+  }
+
+  // Fallback: extract symbol from coin type string
+  function getTokenSymbolFromType(type: string): string {
+    if (!type) return "UNKNOWN";
+
+    // Check for SUI native coin first
+    if (type === "0x2::sui::SUI" || type.toLowerCase() === "0x2::sui::sui") return "SUI";
+
+    // Extract module/type name from pattern like 0xADDRESS::module::Token
+    const moduleMatch = type.match(/::\w+::(\w+)/);
+    if (moduleMatch && moduleMatch[1]) {
+      return moduleMatch[1].toUpperCase();
+    }
+
+    // Last resort: take last segment of type string
     const parts = type.split(/::|</);
     const last = parts[parts.length - 1] ?? type;
-    return last.replace(/>.*/g, "").toUpperCase();
+    return last.replace(/>.*/g, "").toUpperCase().slice(0, 10);
+  }
+
+  // Generate fallback icon URL
+  function getFallbackIconUrl(symbol: string): string {
+    // Check if we have a known icon for this symbol
+    if (KNOWN_TOKEN_ICONS[symbol]) {
+      return KNOWN_TOKEN_ICONS[symbol];
+    }
+    
+    // Generate a unique icon using DiceBear
+    return `https://api.dicebear.com/7.x/identicon/svg?seed=${symbol}&backgroundColor=3b82f6`;
   }
 
   function formatBalance(n: number): string {
@@ -92,20 +159,21 @@ export default function SwapInterface() {
 
         const grouped = new Map<string, TokenBalance>();
 
+        // First, group coins by type
         allCoins.data.forEach(coin => {
-          const symbol = getTokenSymbol(coin.coinType);
           const balance = Number(coin.balance) / 1e9;
 
-          if (!grouped.has(symbol)) {
-            grouped.set(symbol, {
-              symbol,
+          if (!grouped.has(coin.coinType)) {
+            grouped.set(coin.coinType, {
+              symbol: "", // Will be filled in next step
               type: coin.coinType,
               totalBalance: 0,
-              coinObjects: []
+              coinObjects: [],
+              iconUrl: null
             });
           }
 
-          const tokenData = grouped.get(symbol)!;
+          const tokenData = grouped.get(coin.coinType)!;
           tokenData.totalBalance += balance;
           tokenData.coinObjects.push({
             objectId: coin.coinObjectId,
@@ -113,7 +181,20 @@ export default function SwapInterface() {
           });
         });
 
-        setTokenBalances(Array.from(grouped.values()).sort((a, b) =>
+        // Fetch metadata for all coin types
+        const tokensWithMetadata = await Promise.all(
+          Array.from(grouped.values()).map(async (token) => {
+            const metadata = await getCoinMetadata(token.type);
+            
+            return {
+              ...token,
+              symbol: metadata?.symbol || getTokenSymbolFromType(token.type),
+              iconUrl: metadata?.iconUrl || getFallbackIconUrl(metadata?.symbol || getTokenSymbolFromType(token.type))
+            };
+          })
+        );
+
+        setTokenBalances(tokensWithMetadata.sort((a, b) =>
           a.symbol.localeCompare(b.symbol)
         ));
       } catch (error) {
@@ -147,8 +228,8 @@ export default function SwapInterface() {
           id: pool.id,
           token1: pool.token1,
           token2: pool.token2,
-          token1Symbol: pool.token1Symbol || getTokenSymbol(pool.token1),
-          token2Symbol: pool.token2Symbol || getTokenSymbol(pool.token2),
+          token1Symbol: pool.token1Symbol,
+          token2Symbol: pool.token2Symbol,
           token1Icon: pool.token1Icon || "",
           token2Icon: pool.token2Icon || "",
           price: pool.price ?? "—",
@@ -171,8 +252,8 @@ export default function SwapInterface() {
   useEffect(() => {
     if (fromToken && toToken) {
       const pool = pools.find(p => {
-        const sym1 = p.token1Symbol || getTokenSymbol(p.token1);
-        const sym2 = p.token2Symbol || getTokenSymbol(p.token2);
+        const sym1 = p.token1Symbol || getTokenSymbolFromType(p.token1);
+        const sym2 = p.token2Symbol || getTokenSymbolFromType(p.token2);
         return (sym1 === fromToken && sym2 === toToken) || (sym1 === toToken && sym2 === fromToken);
       });
       setSelectedPool(pool || null);
@@ -195,7 +276,7 @@ export default function SwapInterface() {
     const amountIn = parseFloat(fromAmount);
     if (isNaN(amountIn) || amountIn <= 0) return;
 
-    const sym1 = selectedPool.token1Symbol || getTokenSymbol(selectedPool.token1);
+    const sym1 = selectedPool.token1Symbol || getTokenSymbolFromType(selectedPool.token1);
     const isAtoB = fromToken === sym1;
 
     const reserveIn = isAtoB ? (selectedPool.reserve1 || 0) : (selectedPool.reserve2 || 0);
@@ -224,8 +305,6 @@ export default function SwapInterface() {
 
     setToAmount(formatBalance(amountOut / 1e9));
   }
-
-  
 
   function selectCoinsForAmount(tokenSymbol: string, amount: number): string[] {
     const token = tokenBalances.find(t => t.symbol === tokenSymbol);
@@ -276,10 +355,9 @@ export default function SwapInterface() {
         [coinIn] = tx.splitCoins(coinArg, [tx.pure.u64(amountInRaw)]);
       }
 
-      const sym1 = selectedPool.token1Symbol || getTokenSymbol(selectedPool.token1);
+      const sym1 = selectedPool.token1Symbol || getTokenSymbolFromType(selectedPool.token1);
       const isAtoB = fromToken === sym1;
 
-      // Use the correct function name from mini_amm module
       const swapFunction = isAtoB ? "swap_a_for_b_in_pool" : "swap_b_for_a_in_pool";
 
       tx.moveCall({
@@ -366,9 +444,24 @@ export default function SwapInterface() {
                   className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-xl transition-colors min-w-[120px]"
                   disabled={!connected}
                 >
-                  {fromToken ? (
+                  {fromToken && fromTokenData ? (
                     <>
-                      <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-xs">
+                      {fromTokenData.iconUrl ? (
+                        <img
+                          src={fromTokenData.iconUrl}
+                          alt={fromToken}
+                          className="w-6 h-6 rounded-full"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                            if (fallback) fallback.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div 
+                        className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-xs"
+                        style={{ display: fromTokenData.iconUrl ? 'none' : 'flex' }}
+                      >
                         {fromToken[0]}
                       </div>
                       <span className="text-white font-medium">{fromToken}</span>
@@ -435,9 +528,24 @@ export default function SwapInterface() {
                   className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-xl transition-colors min-w-[120px]"
                   disabled={!connected}
                 >
-                  {toToken ? (
+                  {toToken && toTokenData ? (
                     <>
-                      <div className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold text-xs">
+                      {toTokenData.iconUrl ? (
+                        <img
+                          src={toTokenData.iconUrl}
+                          alt={toToken}
+                          className="w-6 h-6 rounded-full"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                            if (fallback) fallback.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div 
+                        className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold text-xs"
+                        style={{ display: toTokenData.iconUrl ? 'none' : 'flex' }}
+                      >
                         {toToken[0]}
                       </div>
                       <span className="text-white font-medium">{toToken}</span>
@@ -516,7 +624,22 @@ export default function SwapInterface() {
                   className="w-full flex items-center justify-between p-3 hover:bg-gray-700 rounded-xl transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+                    {token.iconUrl ? (
+                      <img
+                        src={token.iconUrl}
+                        alt={token.symbol}
+                        className="w-8 h-8 rounded-full"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div 
+                      className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold"
+                      style={{ display: token.iconUrl ? 'none' : 'flex' }}
+                    >
                       {token.symbol[0]}
                     </div>
                     <span className="text-white font-medium">{token.symbol}</span>
@@ -548,7 +671,22 @@ export default function SwapInterface() {
                   className="w-full flex items-center justify-between p-3 hover:bg-gray-700 rounded-xl transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold">
+                    {token.iconUrl ? (
+                      <img
+                        src={token.iconUrl}
+                        alt={token.symbol}
+                        className="w-8 h-8 rounded-full"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div 
+                      className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold"
+                      style={{ display: token.iconUrl ? 'none' : 'flex' }}
+                    >
                       {token.symbol[0]}
                     </div>
                     <span className="text-white font-medium">{token.symbol}</span>

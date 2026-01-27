@@ -23,7 +23,7 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const {
       userAddress,
-      type,            // LiquidityAdded | LiquidityRemoved | SwapExecuted
+      type,            // LiquidityAdded | LiquidityRemoved | SwapEvent
       take = '50',
       skip = '0',
     } = req.query;
