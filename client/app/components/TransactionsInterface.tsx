@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { BACKEND_URL } from "../constants";
 
 type Transaction = {
@@ -12,6 +12,8 @@ type Transaction = {
   token2: string | null;
   token1Symbol: string | null;
   token2Symbol: string | null;
+  token1Icon: string | null;
+  token2Icon: string | null;
   amount1: string | null;
   amount2: string | null;
   lpAmount: string | null;
@@ -23,15 +25,102 @@ type Transaction = {
     token2: string | null;
     token1Symbol: string | null;
     token2Symbol: string | null;
+    token1Icon: string | null;
+    token2Icon: string | null;
   } | null;
+};
+
+type CoinMetadata = {
+  symbol: string;
+  name: string;
+  decimals: number;
+  iconUrl: string | null;
+};
+
+// Known token icons (fallback mapping)
+const KNOWN_TOKEN_ICONS: Record<string, string> = {
+  'SUI': 'https://coin-images.coingecko.com/coins/images/26375/small/sui_asset.jpeg',
+  'USDC': 'https://coin-images.coingecko.com/coins/images/6319/small/usdc.png',
+  'USDT': 'https://coin-images.coingecko.com/coins/images/325/small/Tether.png',
+  'WETH': 'https://coin-images.coingecko.com/coins/images/2518/small/weth.png',
+  'WBTC': 'https://coin-images.coingecko.com/coins/images/7598/small/wrapped_bitcoin_wbtc.png',
+  'SOL': 'https://coin-images.coingecko.com/coins/images/4128/small/solana.png',
+  'CETUS': 'https://coin-images.coingecko.com/coins/images/30556/small/cetus.png',
 };
 
 export default function Transactions() {
   const account = useCurrentAccount();
+  const client = useSuiClient();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<string>("all");
   const [showMyTxOnly, setShowMyTxOnly] = useState(false);
+
+  // Cache for coin metadata
+  const [metadataCache, setMetadataCache] = useState<Map<string, CoinMetadata | null>>(new Map());
+
+  // Fetch coin metadata from blockchain
+  async function getCoinMetadata(coinType: string): Promise<CoinMetadata | null> {
+    if (!coinType) return null;
+
+    // Check cache first
+    if (metadataCache.has(coinType)) {
+      return metadataCache.get(coinType) || null;
+    }
+
+    try {
+      const metadata = await client.getCoinMetadata({ coinType });
+      
+      if (metadata) {
+        const result: CoinMetadata = {
+          symbol: metadata.symbol,
+          name: metadata.name,
+          decimals: metadata.decimals,
+          iconUrl: metadata.iconUrl || null
+        };
+        
+        setMetadataCache(prev => new Map(prev).set(coinType, result));
+        return result;
+      }
+      
+      setMetadataCache(prev => new Map(prev).set(coinType, null));
+      return null;
+    } catch (error) {
+      console.error(`Error fetching metadata for ${coinType}:`, error);
+      setMetadataCache(prev => new Map(prev).set(coinType, null));
+      return null;
+    }
+  }
+
+  // Fallback: extract symbol from coin type string
+  function getTokenSymbolFromType(type: string): string {
+    if (!type) return "UNKNOWN";
+
+    // Check for SUI native coin first
+    if (type === "0x2::sui::SUI" || type.toLowerCase() === "0x2::sui::sui") return "SUI";
+
+    // Extract module/type name from pattern like 0xADDRESS::module::Token
+    const moduleMatch = type.match(/::\w+::(\w+)/);
+    if (moduleMatch && moduleMatch[1]) {
+      return moduleMatch[1].toUpperCase();
+    }
+
+    // Last resort: take last segment of type string
+    const parts = type.split(/::|</);
+    const last = parts[parts.length - 1] ?? type;
+    return last.replace(/>.*/g, "").toUpperCase().slice(0, 10);
+  }
+
+  // Generate fallback icon URL
+  function getFallbackIconUrl(symbol: string): string {
+    // Check if we have a known icon for this symbol
+    if (KNOWN_TOKEN_ICONS[symbol]) {
+      return KNOWN_TOKEN_ICONS[symbol];
+    }
+    
+    // Generate a unique icon using DiceBear
+    return `https://api.dicebear.com/7.x/identicon/svg?seed=${symbol}&backgroundColor=3b82f6`;
+  }
 
   useEffect(() => {
     fetchTransactions();
@@ -60,7 +149,68 @@ export default function Transactions() {
       const json = await res.json();
 
       if (json?.success) {
-        setTransactions(json.data);
+        // Enrich transactions with real metadata
+        const enrichedTransactions = await Promise.all(
+          json.data.map(async (tx: Transaction) => {
+            // Get metadata for token1 and token2
+            let token1Symbol = tx.token1Symbol;
+            let token1Icon = tx.token1Icon;
+            let token2Symbol = tx.token2Symbol;
+            let token2Icon = tx.token2Icon;
+
+            if (tx.token1) {
+              const meta1 = await getCoinMetadata(tx.token1);
+              token1Symbol = meta1?.symbol || getTokenSymbolFromType(tx.token1);
+              token1Icon = meta1?.iconUrl || getFallbackIconUrl(token1Symbol);
+            }
+
+            if (tx.token2) {
+              const meta2 = await getCoinMetadata(tx.token2);
+              token2Symbol = meta2?.symbol || getTokenSymbolFromType(tx.token2);
+              token2Icon = meta2?.iconUrl || getFallbackIconUrl(token2Symbol);
+            }
+
+            // Enrich pool data if exists
+            let enrichedPool = tx.pool;
+            if (tx.pool) {
+              let poolToken1Symbol = tx.pool.token1Symbol;
+              let poolToken1Icon = tx.pool.token1Icon;
+              let poolToken2Symbol = tx.pool.token2Symbol;
+              let poolToken2Icon = tx.pool.token2Icon;
+
+              if (tx.pool.token1) {
+                const meta1 = await getCoinMetadata(tx.pool.token1);
+                poolToken1Symbol = meta1?.symbol || getTokenSymbolFromType(tx.pool.token1);
+                poolToken1Icon = meta1?.iconUrl || getFallbackIconUrl(poolToken1Symbol);
+              }
+
+              if (tx.pool.token2) {
+                const meta2 = await getCoinMetadata(tx.pool.token2);
+                poolToken2Symbol = meta2?.symbol || getTokenSymbolFromType(tx.pool.token2);
+                poolToken2Icon = meta2?.iconUrl || getFallbackIconUrl(poolToken2Symbol);
+              }
+
+              enrichedPool = {
+                ...tx.pool,
+                token1Symbol: poolToken1Symbol,
+                token2Symbol: poolToken2Symbol,
+                token1Icon: poolToken1Icon,
+                token2Icon: poolToken2Icon,
+              };
+            }
+
+            return {
+              ...tx,
+              token1Symbol,
+              token1Icon,
+              token2Symbol,
+              token2Icon,
+              pool: enrichedPool,
+            };
+          })
+        );
+
+        setTransactions(enrichedTransactions);
       }
     } catch (err) {
       console.error("Failed to fetch transactions", err);
@@ -208,7 +358,22 @@ export default function Transactions() {
                   {tx.pool && (
                     <div className="flex items-center gap-2 mb-2">
                       <div className="flex items-center gap-1">
-                        <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-xs">
+                        {tx.pool.token1Icon ? (
+                          <img
+                            src={tx.pool.token1Icon}
+                            alt={tx.pool.token1Symbol || "Token 1"}
+                            className="w-6 h-6 rounded-full"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div 
+                          className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-xs"
+                          style={{ display: tx.pool.token1Icon ? 'none' : 'flex' }}
+                        >
                           {tx.pool.token1Symbol?.[0] || "?"}
                         </div>
                         <span className="text-sm font-medium">
@@ -217,7 +382,22 @@ export default function Transactions() {
                       </div>
                       <span className="text-gray-500">/</span>
                       <div className="flex items-center gap-1">
-                        <div className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold text-xs">
+                        {tx.pool.token2Icon ? (
+                          <img
+                            src={tx.pool.token2Icon}
+                            alt={tx.pool.token2Symbol || "Token 2"}
+                            className="w-6 h-6 rounded-full"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div 
+                          className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold text-xs"
+                          style={{ display: tx.pool.token2Icon ? 'none' : 'flex' }}
+                        >
                           {tx.pool.token2Symbol?.[0] || "?"}
                         </div>
                         <span className="text-sm font-medium">
@@ -230,15 +410,33 @@ export default function Transactions() {
                   {/* Transaction Details */}
                   <div className="text-sm space-y-1">
                     {tx.type === "SwapExecuted" && (
-                      <div className="text-gray-300">
-                        Swapped {formatAmount(tx.amount1)} {tx.token1Symbol} →{" "}
-                        {formatAmount(tx.amount2)} {tx.token2Symbol}
+                      <div className="text-gray-300 flex items-center gap-2">
+                        <span>Swapped</span>
+                        {tx.token1Icon && (
+                          <img src={tx.token1Icon} alt={tx.token1Symbol || ""} className="w-4 h-4 rounded-full inline" />
+                        )}
+                        <span className="font-medium">{formatAmount(tx.amount1)} {tx.token1Symbol}</span>
+                        <span>→</span>
+                        {tx.token2Icon && (
+                          <img src={tx.token2Icon} alt={tx.token2Symbol || ""} className="w-4 h-4 rounded-full inline" />
+                        )}
+                        <span className="font-medium">{formatAmount(tx.amount2)} {tx.token2Symbol}</span>
                       </div>
                     )}
                     {tx.type === "LiquidityAdded" && (
                       <div className="text-gray-300">
-                        Added {formatAmount(tx.amount1)} {tx.token1Symbol} +{" "}
-                        {formatAmount(tx.amount2)} {tx.token2Symbol}
+                        <div className="flex items-center gap-2">
+                          <span>Added</span>
+                          {tx.token1Icon && (
+                            <img src={tx.token1Icon} alt={tx.token1Symbol || ""} className="w-4 h-4 rounded-full inline" />
+                          )}
+                          <span className="font-medium">{formatAmount(tx.amount1)} {tx.token1Symbol}</span>
+                          <span>+</span>
+                          {tx.token2Icon && (
+                            <img src={tx.token2Icon} alt={tx.token2Symbol || ""} className="w-4 h-4 rounded-full inline" />
+                          )}
+                          <span className="font-medium">{formatAmount(tx.amount2)} {tx.token2Symbol}</span>
+                        </div>
                         {tx.lpAmount && (
                           <span className="text-green-400 ml-2">
                             (+{formatAmount(tx.lpAmount)} LP)
@@ -248,8 +446,18 @@ export default function Transactions() {
                     )}
                     {tx.type === "LiquidityRemoved" && (
                       <div className="text-gray-300">
-                        Removed {formatAmount(tx.amount1)} {tx.token1Symbol} +{" "}
-                        {formatAmount(tx.amount2)} {tx.token2Symbol}
+                        <div className="flex items-center gap-2">
+                          <span>Removed</span>
+                          {tx.token1Icon && (
+                            <img src={tx.token1Icon} alt={tx.token1Symbol || ""} className="w-4 h-4 rounded-full inline" />
+                          )}
+                          <span className="font-medium">{formatAmount(tx.amount1)} {tx.token1Symbol}</span>
+                          <span>+</span>
+                          {tx.token2Icon && (
+                            <img src={tx.token2Icon} alt={tx.token2Symbol || ""} className="w-4 h-4 rounded-full inline" />
+                          )}
+                          <span className="font-medium">{formatAmount(tx.amount2)} {tx.token2Symbol}</span>
+                        </div>
                         {tx.lpAmount && (
                           <span className="text-red-400 ml-2">
                             (-{formatAmount(tx.lpAmount)} LP)
