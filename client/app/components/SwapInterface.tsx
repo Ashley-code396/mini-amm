@@ -408,7 +408,7 @@ export default function SwapInterface() {
   const toTokenData = tokenBalances.find(t => t.symbol === toToken);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="bg-gray-800/50 backdrop-blur-xl rounded-3xl p-6 border border-gray-700/50 shadow-2xl">
           <div className="flex justify-between items-center mb-6">
