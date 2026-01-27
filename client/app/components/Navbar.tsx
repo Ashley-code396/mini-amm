@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import { ConnectButton } from '@mysten/dapp-kit';
 
-type Tab = 'swap' | 'suiswap' | 'pool' | 'tokens' | 'transactions';
+type Tab = 'swap' | 'pool' | 'transactions';
 
 interface NavbarProps {
   activeTab?: Tab;
@@ -28,17 +28,6 @@ export default function Navbar({ activeTab = 'swap', onTabChange }: NavbarProps)
               Swap
             </button>
             <button
-              onClick={() => onTabChange?.('suiswap')}
-              className={cn(
-                "px-3 py-2 text-sm font-medium rounded-md",
-                activeTab === 'suiswap' 
-                  ? "bg-blue-600 text-white" 
-                  : "text-gray-300 hover:bg-gray-700 hover:text-white"
-              )}
-            >
-              Suiswap Token
-            </button>
-            <button
               onClick={() => onTabChange?.('pool')}
               className={cn(
                 "px-3 py-2 text-sm font-medium rounded-md",
@@ -49,17 +38,7 @@ export default function Navbar({ activeTab = 'swap', onTabChange }: NavbarProps)
             >
               Pool
             </button>
-            <button
-              onClick={() => onTabChange?.('tokens')}
-              className={cn(
-                "px-3 py-2 text-sm font-medium rounded-md",
-                activeTab === 'tokens' 
-                  ? "bg-blue-600 text-white" 
-                  : "text-gray-300 hover:bg-gray-700 hover:text-white"
-              )}
-            >
-              Token
-            </button>
+            {/* Removed Suiswap Token and Token tabs as requested */}
             <button
               onClick={() => onTabChange?.('transactions')}
               className={cn(

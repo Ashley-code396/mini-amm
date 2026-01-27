@@ -438,7 +438,7 @@ export default function SwapInterface() {
                   </div>
                 )}
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 min-w-0">
                 <button
                   onClick={() => setShowFromTokens(!showFromTokens)}
                   className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-xl transition-colors min-w-[120px]"
@@ -476,7 +476,7 @@ export default function SwapInterface() {
                   value={fromAmount}
                   onChange={(e) => setFromAmount(e.target.value)}
                   placeholder="0.00"
-                  className="flex-1 bg-transparent text-white text-xl text-right focus:outline-none"
+                  className="flex-1 min-w-0 bg-transparent text-white text-xl text-right focus:outline-none"
                   disabled={!fromToken}
                 />
               </div>
@@ -522,7 +522,7 @@ export default function SwapInterface() {
                   </div>
                 )}
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 min-w-0">
                 <button
                   onClick={() => setShowToTokens(!showToTokens)}
                   className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-xl transition-colors min-w-[120px]"
@@ -560,7 +560,7 @@ export default function SwapInterface() {
                   value={toAmount}
                   readOnly
                   placeholder="0.00"
-                  className="flex-1 bg-transparent text-white text-xl text-right focus:outline-none"
+                  className="flex-1 min-w-0 bg-transparent text-white text-xl text-right focus:outline-none"
                 />
               </div>
             </div>

@@ -274,7 +274,7 @@ export default function Transactions() {
               All
             </button>
             <button
-              onClick={() => setFilter("SwapExecuted")}
+              onClick={() => setFilter("SwapEvent")}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                 filter === "SwapExecuted"
                   ? "bg-blue-500 text-white"
@@ -356,7 +356,7 @@ export default function Transactions() {
 
                   {/* Pool Token Pair */}
                   {tx.pool && (
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-2 min-w-0">
                       <div className="flex items-center gap-1">
                         {tx.pool.token1Icon ? (
                           <img
@@ -376,7 +376,7 @@ export default function Transactions() {
                         >
                           {tx.pool.token1Symbol?.[0] || "?"}
                         </div>
-                        <span className="text-sm font-medium">
+                        <span className="text-sm font-medium truncate overflow-hidden max-w-[6rem]">
                           {tx.pool.token1Symbol || "Unknown"}
                         </span>
                       </div>
@@ -400,7 +400,7 @@ export default function Transactions() {
                         >
                           {tx.pool.token2Symbol?.[0] || "?"}
                         </div>
-                        <span className="text-sm font-medium">
+                        <span className="text-sm font-medium truncate overflow-hidden max-w-[6rem]">
                           {tx.pool.token2Symbol || "Unknown"}
                         </span>
                       </div>
@@ -410,32 +410,32 @@ export default function Transactions() {
                   {/* Transaction Details */}
                   <div className="text-sm space-y-1">
                     {tx.type === "SwapExecuted" && (
-                      <div className="text-gray-300 flex items-center gap-2">
-                        <span>Swapped</span>
-                        {tx.token1Icon && (
-                          <img src={tx.token1Icon} alt={tx.token1Symbol || ""} className="w-4 h-4 rounded-full inline" />
-                        )}
-                        <span className="font-medium">{formatAmount(tx.amount1)} {tx.token1Symbol}</span>
-                        <span>→</span>
-                        {tx.token2Icon && (
-                          <img src={tx.token2Icon} alt={tx.token2Symbol || ""} className="w-4 h-4 rounded-full inline" />
-                        )}
-                        <span className="font-medium">{formatAmount(tx.amount2)} {tx.token2Symbol}</span>
-                      </div>
+                      <div className="text-gray-300 flex items-center gap-2 min-w-0">
+                          <span className="whitespace-nowrap">Swapped</span>
+                          {tx.token1Icon && (
+                            <img src={tx.token1Icon} alt={tx.token1Symbol || ""} className="w-4 h-4 rounded-full inline flex-shrink-0" />
+                          )}
+                          <span className="font-medium truncate overflow-hidden max-w-[7rem]">{formatAmount(tx.amount1)} {tx.token1Symbol}</span>
+                          <span className="flex-shrink-0">→</span>
+                          {tx.token2Icon && (
+                            <img src={tx.token2Icon} alt={tx.token2Symbol || ""} className="w-4 h-4 rounded-full inline flex-shrink-0" />
+                          )}
+                          <span className="font-medium truncate overflow-hidden max-w-[7rem]">{formatAmount(tx.amount2)} {tx.token2Symbol}</span>
+                        </div>
                     )}
                     {tx.type === "LiquidityAdded" && (
                       <div className="text-gray-300">
-                        <div className="flex items-center gap-2">
-                          <span>Added</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="whitespace-nowrap">Added</span>
                           {tx.token1Icon && (
-                            <img src={tx.token1Icon} alt={tx.token1Symbol || ""} className="w-4 h-4 rounded-full inline" />
+                            <img src={tx.token1Icon} alt={tx.token1Symbol || ""} className="w-4 h-4 rounded-full inline flex-shrink-0" />
                           )}
-                          <span className="font-medium">{formatAmount(tx.amount1)} {tx.token1Symbol}</span>
-                          <span>+</span>
+                          <span className="font-medium truncate overflow-hidden max-w-[7rem]">{formatAmount(tx.amount1)} {tx.token1Symbol}</span>
+                          <span className="flex-shrink-0">+</span>
                           {tx.token2Icon && (
-                            <img src={tx.token2Icon} alt={tx.token2Symbol || ""} className="w-4 h-4 rounded-full inline" />
+                            <img src={tx.token2Icon} alt={tx.token2Symbol || ""} className="w-4 h-4 rounded-full inline flex-shrink-0" />
                           )}
-                          <span className="font-medium">{formatAmount(tx.amount2)} {tx.token2Symbol}</span>
+                          <span className="font-medium truncate overflow-hidden max-w-[7rem]">{formatAmount(tx.amount2)} {tx.token2Symbol}</span>
                         </div>
                         {tx.lpAmount && (
                           <span className="text-green-400 ml-2">
@@ -446,17 +446,17 @@ export default function Transactions() {
                     )}
                     {tx.type === "LiquidityRemoved" && (
                       <div className="text-gray-300">
-                        <div className="flex items-center gap-2">
-                          <span>Removed</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="whitespace-nowrap">Removed</span>
                           {tx.token1Icon && (
-                            <img src={tx.token1Icon} alt={tx.token1Symbol || ""} className="w-4 h-4 rounded-full inline" />
+                            <img src={tx.token1Icon} alt={tx.token1Symbol || ""} className="w-4 h-4 rounded-full inline flex-shrink-0" />
                           )}
-                          <span className="font-medium">{formatAmount(tx.amount1)} {tx.token1Symbol}</span>
-                          <span>+</span>
+                          <span className="font-medium truncate overflow-hidden max-w-[7rem]">{formatAmount(tx.amount1)} {tx.token1Symbol}</span>
+                          <span className="flex-shrink-0">+</span>
                           {tx.token2Icon && (
-                            <img src={tx.token2Icon} alt={tx.token2Symbol || ""} className="w-4 h-4 rounded-full inline" />
+                            <img src={tx.token2Icon} alt={tx.token2Symbol || ""} className="w-4 h-4 rounded-full inline flex-shrink-0" />
                           )}
-                          <span className="font-medium">{formatAmount(tx.amount2)} {tx.token2Symbol}</span>
+                          <span className="font-medium truncate overflow-hidden max-w-[7rem]">{formatAmount(tx.amount2)} {tx.token2Symbol}</span>
                         </div>
                         {tx.lpAmount && (
                           <span className="text-red-400 ml-2">
