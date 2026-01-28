@@ -6,7 +6,7 @@ import PoolInterface from "./components/PoolInterface";
 import Transactions from './components/TransactionsInterface';
 import Navbar from "./components/Navbar";
 
-type Tab = 'swap' | 'pool' | 'suiswap' | 'tokens' | 'transactions';
+type Tab = 'swap' | 'pool' | 'transactions';
 
 export default function Home() {
   const [activeView, setActiveView] = useState<Tab>('swap');
