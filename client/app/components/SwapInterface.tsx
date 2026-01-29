@@ -7,7 +7,7 @@ import {
   useSuiClient,
   useCurrentAccount,
 } from "@mysten/dapp-kit";
-import { ChevronDown, ArrowDownUp, Settings } from "lucide-react";
+import { ChevronDown, ArrowDownUp } from "lucide-react";
 
 import { TESTNET_PACKAGE_ID, CONTAINER_ID } from "../constants";
 import { BACKEND_URL } from "../constants";
@@ -65,9 +65,6 @@ export default function SwapInterface() {
   const [fromAmount, setFromAmount] = useState("");
   const [toAmount, setToAmount] = useState("");
   const [selectedPool, setSelectedPool] = useState<PoolSummary | null>(null);
-  const [slippage, setSlippage] = useState(1.0);
-  const [showSlippageModal, setShowSlippageModal] = useState(false);
-  const [customSlippage, setCustomSlippage] = useState("");
 
   const [showFromTokens, setShowFromTokens] = useState(false);
   const [showToTokens, setShowToTokens] = useState(false);
@@ -413,12 +410,6 @@ export default function SwapInterface() {
         <div className="bg-gray-800/50 backdrop-blur-xl rounded-3xl p-6 border border-gray-700/50 shadow-2xl">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold text-white">Exchange Token</h1>
-            <button
-              onClick={() => setShowSlippageModal(true)}
-              className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
-            >
-              <Settings className="w-5 h-5 text-gray-400" />
-            </button>
           </div>
 
           {!connected && (
@@ -579,18 +570,8 @@ export default function SwapInterface() {
           {selectedPool && fromAmount && toAmount && (
             <div className="mt-4 p-3 bg-gray-900/50 rounded-xl text-sm space-y-1">
               <div className="flex justify-between text-gray-400">
-                <span>Slippage Tolerance</span>
-                <span className="text-white">{slippage}%</span>
-              </div>
-              <div className="flex justify-between text-gray-400">
-                <span>Minimum Received</span>
-                <span className="text-white">
-                  {formatBalance(parseFloat(toAmount) * (1 - slippage / 100))} {toToken}
-                </span>
-              </div>
-              <div className="flex justify-between text-gray-400">
-                <span>Trading Fee</span>
-                <span className="text-white">0.3%</span>
+                <span>Estimated Received</span>
+                <span className="text-white">{formatBalance(parseFloat(toAmount))} {toToken}</span>
               </div>
             </div>
           )}
@@ -699,59 +680,7 @@ export default function SwapInterface() {
         </div>
       )}
 
-      {/* Slippage Modal */}
-      {showSlippageModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-white">Slippage Settings</h3>
-              <button onClick={() => setShowSlippageModal(false)} className="text-gray-400 hover:text-white text-2xl">×</button>
-            </div>
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                {[0.2, 0.5, 1.0, 2.0].map(pct => (
-                  <button
-                    key={pct}
-                    onClick={() => setSlippage(pct)}
-                    className={`flex-1 py-2 rounded-lg font-medium transition-colors ${
-                      slippage === pct
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                  >
-                    {pct}%
-                  </button>
-                ))}
-              </div>
-              <div className="flex gap-2 items-center">
-                <input
-                  type="number"
-                  value={customSlippage}
-                  onChange={(e) => setCustomSlippage(e.target.value)}
-                  placeholder="Custom"
-                  className="flex-1 bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  step="0.1"
-                />
-                <button
-                  onClick={() => {
-                    const val = parseFloat(customSlippage);
-                    if (!isNaN(val) && val > 0 && val <= 50) {
-                      setSlippage(val);
-                      setShowSlippageModal(false);
-                    }
-                  }}
-                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
-                >
-                  Set
-                </button>
-              </div>
-              <div className="text-xs text-gray-400 text-center">
-                Your transaction will revert if the price changes unfavorably by more than this percentage
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Slippage/settings removed */}
     </div>
   );
 }
