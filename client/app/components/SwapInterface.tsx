@@ -65,6 +65,7 @@ export default function SwapInterface() {
   const [fromAmount, setFromAmount] = useState("");
   const [toAmount, setToAmount] = useState("");
   const [selectedPool, setSelectedPool] = useState<PoolSummary | null>(null);
+  
 
   const [showFromTokens, setShowFromTokens] = useState(false);
   const [showToTokens, setShowToTokens] = useState(false);
@@ -567,14 +568,7 @@ export default function SwapInterface() {
             </div>
           ) : null}
 
-          {selectedPool && fromAmount && toAmount && (
-            <div className="mt-4 p-3 bg-gray-900/50 rounded-xl text-sm space-y-1">
-              <div className="flex justify-between text-gray-400">
-                <span>Estimated Received</span>
-                <span className="text-white">{formatBalance(parseFloat(toAmount))} {toToken}</span>
-              </div>
-            </div>
-          )}
+          
 
           <button
             onClick={handleSwap}
@@ -597,7 +591,7 @@ export default function SwapInterface() {
             <div className="space-y-2">
               {tokenBalances.map(token => (
                 <button
-                  key={token.symbol}
+                  key={token.type}
                   onClick={() => {
                     setFromToken(token.symbol);
                     setShowFromTokens(false);
@@ -644,7 +638,7 @@ export default function SwapInterface() {
             <div className="space-y-2">
               {tokenBalances.filter(t => t.symbol !== fromToken).map(token => (
                 <button
-                  key={token.symbol}
+                  key={token.type}
                   onClick={() => {
                     setToToken(token.symbol);
                     setShowToTokens(false);
@@ -680,7 +674,7 @@ export default function SwapInterface() {
         </div>
       )}
 
-      {/* Slippage/settings removed */}
+      
     </div>
   );
 }
